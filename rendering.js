@@ -112,6 +112,7 @@ WallRaycaster.prototype = {
             // insert the new strip, along with metadata
             wall.kind = S_WALL;
             wall.texture = intersection.withCell.wallTexture;
+            wall.textureCoords = {u: intersection.textureU, topV: 0.0, bottomV: 1.0};
             insertStrip(column, wall);
 
             // store the finished column
@@ -168,7 +169,8 @@ WallRaycaster.prototype = {
                         ray: {x: ray.x, y: ray.y},
                         intersectedAt: intersectionPoint,
                         wallNormal: {x: goingHorizontally ? ray.sgnX : 0, y: goingHorizontally ? 0 : ray.sgnY},
-                        withCell: cell
+                        withCell: cell,
+                        textureU: goingHorizontally ? frac.y : frac.x
                     };
                 }
             }
@@ -229,16 +231,17 @@ LevelRenderer.prototype = {
                 // calculate locations in the buffer where the strip starts/ends
                 var nextStrip = column[s+1];
 
-                // pick color based on strip type
+                // wall?
+                if (strip.kind == S_WALL) {
+                    drawTexturedStrip(x, strip, nextStrip);
+                    return;
+                }
+
+                // not a wall, pick a solid color based on strip type
                 var r, g, b;
                 switch(strip.kind) {
                     case S_FLOOR:    r = g = b = 100; break;
                     case S_CEILING:  r = g = b = 50; break;
-                    case S_WALL:
-                        var texture = strip.texture;
-                        r = texture.pixels[0] * strip.lighting;
-                        g = texture.pixels[1] * strip.lighting;
-                        b = texture.pixels[2] * strip.lighting;
                 }
 
                 // draw a vertical uniform strip in the buffer
@@ -248,7 +251,44 @@ LevelRenderer.prototype = {
                     pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
                 }
             });
-        })
+        });
+
+        function drawTexturedStrip(stripX, strip, nextStrip) {
+            var texture = strip.texture;
+            var lighting = strip.lighting;
+            var tex = texture.pixels, buf = buffer.data;
+
+            var texX = Math.floor(texture.width * strip.textureCoords.u);
+            var texStride = texture.width * 4;
+            var texLoc = texX * 4;
+
+            var texFracY = 0, texYStep = texture.height / (nextStrip.topY - strip.topY);
+
+            var r, g, b;
+            r = tex[texLoc] * lighting;
+            g = tex[texLoc+1] * lighting;
+            b = tex[texLoc+2] * lighting;
+
+            // for now, we assume (wrongly!) that the strip covers the whole texture vertically exactly once
+            var startLoc = buffer.index(stripX, strip.topY),
+                endLoc = buffer.index(stripX, nextStrip.topY);
+            for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
+                buf[loc++] = r; buf[loc++] = g; buf[loc++] = b;
+
+                // increment our texture pixel counter
+                texFracY += texYStep;
+                if (texFracY > 0) {
+                    // the texel is no longer correct, move down the texture
+                    var steps = Math.floor(texFracY);
+                    texLoc += texStride * steps;
+                    texFracY -= steps;
+
+                    r = tex[texLoc] * lighting;
+                    g = tex[texLoc+1] * lighting;
+                    b = tex[texLoc+2] * lighting;
+                }
+            }
+        }
     }
 };
 
