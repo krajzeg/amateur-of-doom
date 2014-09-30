@@ -8,8 +8,8 @@ var startDemo = function() {
 
 	var levelData =
 		"##########" +
-		"#     #  #" +
-		"#      # #" +
+		"#   #    #" +
+		"#        #" +
 		"#        #" +
 		"#        #" +
 		"#  # #####" +
@@ -27,7 +27,7 @@ var startDemo = function() {
 	// ====================================================================
 
 	function GameState(levelData, levelWidth, levelHeight) {
-		this.player = {x: 4.5, y: 4.5, elevation: 0.5, bearing: 45};
+		this.player = {x: 4.5, y: 2 + Math.sqrt(3), elevation: 0.5, bearing: 0};
 		this.level = this.parseLevel(levelData, levelWidth, levelHeight);
 		this.keyState = {};
 	}
@@ -112,9 +112,9 @@ var startDemo = function() {
 
 			// cache projection information for each screen column
 			var projectionColumns = new Array(width);
-			var pxInc = 1 / width;
-			for (var x = 0, px = -0.5; x < width; x++, px += pxInc) {
-				var angle = Math.atan(px, this.projectionDistance);
+			var pxInc = this.projectionWidth / width;
+			for (var x = 0, px = -this.projectionWidth / 2 + pxInc / 2; x < width; x++, px += pxInc) {
+				var angle = Math.atan2(px, this.projectionDistance);
 				projectionColumns[x] = {
 					relativeAngle: angle,
 					angleCosine:   Math.cos(angle)
