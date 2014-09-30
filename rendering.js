@@ -105,13 +105,13 @@ WallRaycaster.prototype = {
 
             // light the wall (simplified Phong lighting with no specularity)
             var lighting = lightPower / distance / distance; // attenuation with distance
-            lighting *= ambient + diffuse * Math.abs(intersection.ray.x * intersection.wallNormal.x + intersection.ray.y * intersection.wallNormal.y); // simplified Phong
             lighting = Math.min(1.0, lighting);
+            lighting *= ambient + diffuse * Math.abs(intersection.ray.x * intersection.wallNormal.x + intersection.ray.y * intersection.wallNormal.y); // simplified Phong
             wall.lighting = lighting;
 
             // insert the new strip, along with metadata
             wall.kind = S_WALL;
-            wall.color = intersection.wallDirection == WD_HORIZONTAL ? [255, 200, 200] : [200, 200, 255];
+            wall.color = [200, 200, 255];
             insertStrip(column, wall);
 
             // store the finished column
