@@ -6,10 +6,10 @@ var WD_HORIZONTAL = 'h', WD_VERTICAL = 'v';
 // ===============================================================
 
 // constants for the projection we want
-function Projection(canvas, fovInDegrees, projectionPlaneWidth) {
+function Projection(buffer, fovInDegrees, projectionPlaneWidth) {
     // get screen dimensions
-    var screenWidth = this.screenWidth = canvas.width;
-    var screenHeight = this.screenHeight = canvas.height;
+    var screenWidth = this.screenWidth = buffer.width;
+    var screenHeight = this.screenHeight = buffer.height;
 
     // calculate projection plane parameters from the desired FOV
     var fov = deg2rad(fovInDegrees);
@@ -29,6 +29,33 @@ function Projection(canvas, fovInDegrees, projectionPlaneWidth) {
     }
     this.columns = projectionColumns;
 }
+
+// ===============================================================
+
+function Buffer(canvas) {
+    this.context = canvas.getContext('2d');
+    this.canvasPixelArray  = this.context.createImageData(canvas.width, canvas.height);
+    this.data = this.canvasPixelArray.data;
+    this.width = canvas.width;
+    this.height = canvas.height;
+
+    this.setupAlphaChannel();
+}
+Buffer.prototype = {
+    setupAlphaChannel: function() {
+        // set alpha to 255 for the rest of eternity
+        var data = this.data;
+        for (var i = 3; i < data.length; i += 4)
+            data[i] = 255;
+    },
+
+    /**
+     * Draws the contents of the buffer onto the canvas.
+     */
+    show: function() {
+        this.context.putImageData(this.canvasPixelArray, 0, 0);
+    }
+};
 
 // ===============================================================
 
@@ -167,35 +194,15 @@ WallRaycaster.prototype = {
 // ===============================================================
 
 function Renderer(canvas) {
-    this.setup(canvas);
+    this.buffer = new Buffer(canvas);
+    this.projection = new Projection(this.buffer, 60, 2.0);
+    this.raycaster = new WallRaycaster(this.projection);
 }
 Renderer.prototype = {
-    setup: function(canvas) {
-        this.canvas = canvas;
-        this.context = canvas.getContext('2d');
-        this.buffer = this.setupBuffer();
-
-        this.projection = new Projection(canvas, 60, 2.0);
-        this.raycaster = new WallRaycaster(this.projection);
-    },
-
-    setupBuffer: function() {
-        // create a fullscreen buffer
-        var buffer = this.context.createImageData(this.canvas.width, this.canvas.height);
-
-        // set alpha to 255 for the rest of eternity
-        var data = buffer.data;
-        for (var i = 3; i < data.length; i += 4)
-            data[i] = 255;
-
-        // return the buffer
-        return buffer;
-    },
-
     renderFrame: function(pointOfView, levelMap) {
         // prepare some constants for later
-        var buf = this.bufferData();
-        var width = this.canvas.width;
+        var buf = this.buffer.data;
+        var screenWidth = this.buffer.width;
 
         // prepare our internal representation using raycasting
         var view = this.raycaster.projectWallsAndFloors(pointOfView, levelMap);
@@ -204,8 +211,7 @@ Renderer.prototype = {
         drawColumns(view);
 
         // 'flip' the buffer!
-        this.context.putImageData(this.buffer, 0, 0);
-
+        this.buffer.show();
 
         function drawColumns(columns) {
             // go through all the columns
@@ -216,9 +222,9 @@ Renderer.prototype = {
 
                     // calculate locations in the buffer where the strip starts/ends
                     var nextStrip = column[s+1];
-                    var startLoc = (strip.topY * width + x) * 4,
-                        endLoc = (nextStrip.topY * width + x) * 4,
-                        stride = width * 4 - 3;
+                    var startLoc = (strip.topY * screenWidth + x) * 4,
+                        endLoc = (nextStrip.topY * screenWidth + x) * 4,
+                        stride = screenWidth * 4 - 3;
 
                     // pick color based on strip type
                     var r, g, b;
