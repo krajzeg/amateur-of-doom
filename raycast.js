@@ -29,6 +29,7 @@ var startDemo = function() {
 	function GameState(levelData, levelWidth, levelHeight) {
 		this.player = {x: 4.5, y: 4.5, elevation: 0.5, bearing: 45};
 		this.level = this.parseLevel(levelData, levelWidth, levelHeight);
+		this.keyState = {};
 	}
 	GameState.prototype = {
 		parseLevel: function(levelData, levelWidth, levelHeight) {
@@ -45,6 +46,30 @@ var startDemo = function() {
 				width: levelWidth,
 				height: levelHeight,
 				cells: cells
+			}
+		},
+
+		bindEvents: function() {
+			var self = this;
+			window.onkeydown = handler.bind(null, true);
+			window.onkeyup   = handler.bind(null, false);
+				
+			function handler(state, evt) {
+				self.keyState[String.fromCharCode(evt.which)] = state;
+			}
+		},
+
+		update: function() {
+			if (this.keyState['A']) this.player.bearing -= 3.0;
+			if (this.keyState['D']) this.player.bearing += 3.0;
+
+			if (this.keyState['W'] || this.keyState['S']) {				
+				var angle = deg2rad(this.player.bearing);
+				var dir = {x: Math.sin(angle), y: -Math.cos(angle)};
+				var moveSpeed = 0.25 * ((this.keyState['W'] ? 1 : 0) + (this.keyState['S'] ? -1 : 0));
+
+				this.player.x += dir.x * moveSpeed; 
+				this.player.y += dir.y * moveSpeed;
 			}
 		}
 	}
@@ -185,7 +210,6 @@ var startDemo = function() {
 
 					// we're in the next grid, did we hit?
 					var cell = cells[grid.y * lW + grid.x];
-					console.log(grid.x, grid.y);
 					if (cell.floor > 0) {
 						// yup! that's a wall!
 						var intersectionPoint = {x: grid.x + frac.x, y: grid.y + frac.y};
@@ -200,8 +224,6 @@ var startDemo = function() {
 			}
 
 			function insertStrip(strips, newStrip) {
-				console.log(newStrip);
-				console.log(nextStrip);
 				for (var i = 1; ; i++) {
 					var nextStrip = strips[i];
 					if (nextStrip.topY > newStrip.topY) {
@@ -224,10 +246,11 @@ var startDemo = function() {
 			function projectWall(relativeTop, relativeBottom, zDistance) {							
 				// scale according to Z distance
 				var scalingFactor = projectionDistance / zDistance;
-				console.log(zDistance);
 				var top = (0.5 + relativeTop * scalingFactor) * height;
 				var bottom = (0.5 + relativeBottom * scalingFactor) * height;
-
+				if (top < 0) top = 0;
+				if (bottom > height) bottom = height;
+				
 				return {topY: Math.round(top), bottomY: Math.round(bottom)};
 			}
 
@@ -270,13 +293,16 @@ var startDemo = function() {
 
 	return function() {
 		var gameState = new GameState(levelData, 10, 10);
+		gameState.bindEvents();
 		var renderer = new Renderer(document.getElementById('screen'));
 
-		requestAnimationFrame(update);
+		requestAnimationFrame(nextFrame);
 		
-		function update() {
+		function nextFrame() {
+			gameState.update();
 			renderer.renderFrame(gameState);
-			//requestAnimationFrame(update);
+			
+			requestAnimationFrame(nextFrame);
 		}
 	}
 }();
