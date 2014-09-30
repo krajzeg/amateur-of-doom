@@ -5,107 +5,77 @@ var WD_HORIZONTAL = 'h', WD_VERTICAL = 'v';
 
 // ===============================================================
 
-function Renderer(canvas) {
-    this.setup(canvas);
+// constants for the projection we want
+function Projection(canvas, fovInDegrees, projectionPlaneWidth) {
+    // get screen dimensions
+    var screenWidth = this.screenWidth = canvas.width;
+    var screenHeight = this.screenHeight = canvas.height;
+
+    // calculate projection plane parameters from the desired FOV
+    var fov = deg2rad(fovInDegrees);
+    this.width = projectionPlaneWidth;
+    this.height = projectionPlaneWidth * screenHeight / screenWidth;
+    this.distance = this.width * 0.5 / Math.tan(fov * 0.5);
+
+    // cache projection information for each screen column
+    var projectionColumns = new Array(screenWidth);
+    var pxInc = this.width / screenWidth;
+    for (var screenX = 0, projectionX = -this.width / 2 + pxInc / 2; screenX < screenWidth; screenX++, projectionX += pxInc) {
+        var angle = Math.atan2(projectionX, this.distance);
+        projectionColumns[screenX] = {
+            relativeAngle: angle,
+            angleCosine:   Math.cos(angle)
+        };
+    }
+    this.columns = projectionColumns;
 }
-Renderer.prototype = {
-    setup: function(canvas) {
-        this.canvas = canvas;
-        this.context = canvas.getContext('2d');
-        this.buffer = this.setupBuffer();
 
-        this.setupProjection();
-    },
+// ===============================================================
 
-    setupBuffer: function() {
-        // create a fullscreen buffer
-        var buffer = this.context.createImageData(this.canvas.width, this.canvas.height);
+function WallRaycaster(projection) {
+    this.projection = projection;
+}
+WallRaycaster.prototype = {
+    projectWallsAndFloors: function(pointOfView, levelMap) {
+        // how are we projecting this thing?
+        var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
+        var screenCenterY = Math.ceil(screenHeight / 2);
+        var projection = this.projection;
 
-        // set alpha to 255 for the rest of eternity
-        var data = buffer.data;
-        for (var i = 3; i < data.length; i += 4)
-            data[i] = 255;
+        // where are we rendering from?
+        var rayOrigin = {x: pointOfView.x, y: pointOfView.y};
+        var eyeAngle = deg2rad(pointOfView.bearing);
 
-        // return the buffer
-        return buffer;
-    },
+        // go through all the columns in the screen
+        var columns = new Array(screenWidth), column;
+        for (var rx = 0; rx < screenWidth; rx++) {
+            // every column starts with just the floor and ceiling
+            column = [
+                {kind: S_CEILING, topY: 0},
+                {kind: S_FLOOR, topY: screenCenterY},
+                {kind: S_END, topY: screenHeight} // sentinel value for simplifying various algorithms
+            ];
 
-    setupProjection: function() {
-        var canvas = this.canvas, width = canvas.width;
+            // look for the wall
+            var rayAngle = eyeAngle + projection.columns[rx].relativeAngle;
+            var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
 
-        // use a specific field of view in degrees
-        this.fov = deg2rad(60);
-        this.projectionWidth = 2.0;
-        this.projectionHeight = this.projectionWidth * canvas.height / canvas.width;
-        this.projectionDistance = this.projectionWidth / Math.tan(this.fov / 2) / 2;
+            // project the wall strip
+            var z = zDistance(rayOrigin, intersection.intersectedAt, projection.columns[rx].angleCosine);
+            var wall = projectWall(-0.5, 0.5, z);
 
-        // cache projection information for each screen column
-        var projectionColumns = new Array(width);
-        var pxInc = this.projectionWidth / width;
-        for (var x = 0, px = -this.projectionWidth / 2 + pxInc / 2; x < width; x++, px += pxInc) {
-            var angle = Math.atan2(px, this.projectionDistance);
-            projectionColumns[x] = {
-                relativeAngle: angle,
-                angleCosine:   Math.cos(angle)
-            };
+            // insert the new strip, along with metadata
+            wall.kind = S_WALL;
+            wall.color = intersection.wallDirection == WD_HORIZONTAL ? [255, 200, 200] : [200, 200, 255];
+            insertStrip(column, wall);
+
+            // store the finished column
+            columns[rx] = column;
         }
-        this.projectionColumns = projectionColumns;
-    },
 
-    renderFrame: function(pointOfView, levelMap) {
-        // prepare some constants for later
-        var self = this;
-        var buf = this.bufferData();
-        var width = this.canvas.width, height = this.canvas.height,
-            centerY = height / 2;
+        return columns;
 
-        var projectionDistance = self.projectionDistance;
-        var projectionHeight = self.projectionHeight;
-        var projectionColumns = self.projectionColumns;
-
-        // prepare our internal representation using raycasting
-        var columns = raycastColumns();
-
-        // draw the representation onto the buffer
-        drawColumns(columns);
-
-        // 'flip' the buffer!
-        this.context.putImageData(this.buffer, 0, 0);
-
-
-        function raycastColumns() {
-            var columns = new Array(width), column;
-            var rayOrigin = {x: pointOfView.x, y: pointOfView.y};
-            var eyeAngle = deg2rad(pointOfView.bearing);
-
-            // go through all the columns in the screen
-            for (var rx = 0; rx < width; rx++) {
-                // every column starts with just the floor and ceiling
-                column = [
-                    {kind: S_CEILING, topY: 0},
-                    {kind: S_FLOOR, topY: centerY},
-                    {kind: S_END, topY: height} // sentinel value for simplifying various algorithms
-                ];
-
-                // look for the wall
-                var rayAngle = eyeAngle + projectionColumns[rx].relativeAngle;
-                var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
-
-                // project the wall strip
-                var z = zDistance(rayOrigin, intersection.intersectedAt, projectionColumns[rx].angleCosine);
-                var wall = projectWall(-0.5, 0.5, z);
-
-                // insert the new strip, along with metadata
-                wall.kind = S_WALL;
-                wall.color = intersection.wallDirection == WD_HORIZONTAL ? [255, 200, 200] : [200, 200, 255];
-                insertStrip(column, wall);
-
-                // store the finished column
-                columns[rx] = column;
-            }
-
-            return columns;
-        }
+        // ==== raycasting substeps below
 
         function castRayAndReturnIntersections(origin, angle) {
             var cells = levelMap.cells, lW = levelMap.width;
@@ -159,19 +129,6 @@ Renderer.prototype = {
             }
         }
 
-        function insertStrip(strips, newStrip) {
-            for (var i = 1; ; i++) {
-                var nextStrip = strips[i];
-                if (nextStrip.topY > newStrip.topY) {
-                    // insert here
-                    strips.splice(i, 0, newStrip);
-                    // fix up the next strip's top to our bottom
-                    nextStrip.topY = newStrip.bottomY;
-                    return;
-                }
-            }
-        }
-
         function zDistance(rayOrigin, rayIntersection, angularCorrection) {
             var distanceVec = {x: rayIntersection.x - rayOrigin.x, y: rayIntersection.y - rayOrigin.y}; // this is straight-line distance
             var distance = Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
@@ -180,17 +137,74 @@ Renderer.prototype = {
 
         function projectWall(relativeTop, relativeBottom, zDistance) {
             // scale according to Z distance
-            var scalingFactor = projectionDistance / zDistance;
-            var top = relativeTop * scalingFactor / projectionHeight;
-            var bottom = relativeBottom * scalingFactor / projectionHeight;
+            var scalingFactor = projection.distance / zDistance;
+            var top = relativeTop * scalingFactor / projection.height;
+            var bottom = relativeBottom * scalingFactor / projection.height;
             if (top < -0.5) top = -0.5;
             if (bottom > 0.5) bottom = 0.5;
 
-            var screenTop = Math.round((0.5 + top) * height);
-            var screenBottom = Math.round((0.5 + bottom) * height);
+            var screenTop = Math.round((0.5 + top) * screenHeight);
+            var screenBottom = Math.round((0.5 + bottom) * screenHeight);
 
             return {topY: screenTop, bottomY: screenBottom};
         }
+
+        function insertStrip(strips, newStrip) {
+            for (var i = 1; ; i++) {
+                var nextStrip = strips[i];
+                if (nextStrip.topY > newStrip.topY) {
+                    // insert here
+                    strips.splice(i, 0, newStrip);
+                    // fix up the top of next strip to our bottom
+                    nextStrip.topY = newStrip.bottomY;
+                    return;
+                }
+            }
+        }
+    }
+};
+
+// ===============================================================
+
+function Renderer(canvas) {
+    this.setup(canvas);
+}
+Renderer.prototype = {
+    setup: function(canvas) {
+        this.canvas = canvas;
+        this.context = canvas.getContext('2d');
+        this.buffer = this.setupBuffer();
+
+        this.projection = new Projection(canvas, 60, 2.0);
+        this.raycaster = new WallRaycaster(this.projection);
+    },
+
+    setupBuffer: function() {
+        // create a fullscreen buffer
+        var buffer = this.context.createImageData(this.canvas.width, this.canvas.height);
+
+        // set alpha to 255 for the rest of eternity
+        var data = buffer.data;
+        for (var i = 3; i < data.length; i += 4)
+            data[i] = 255;
+
+        // return the buffer
+        return buffer;
+    },
+
+    renderFrame: function(pointOfView, levelMap) {
+        // prepare some constants for later
+        var buf = this.bufferData();
+        var width = this.canvas.width;
+
+        // prepare our internal representation using raycasting
+        var view = this.raycaster.projectWallsAndFloors(pointOfView, levelMap);
+
+        // draw the representation onto the buffer
+        drawColumns(view);
+
+        // 'flip' the buffer!
+        this.context.putImageData(this.buffer, 0, 0);
 
 
         function drawColumns(columns) {
