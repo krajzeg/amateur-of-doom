@@ -54,6 +54,16 @@ Buffer.prototype = {
      */
     show: function() {
         this.context.putImageData(this.canvasPixelArray, 0, 0);
+    },
+
+    /**
+     * Returns the index in the 'data' array corresponding to the first component
+     * of a pixel at chosen coordinates.
+     * @param x the x coordinate of the pixel we want
+     * @param y ditto, y
+     */
+    index: function(x, y) {
+        return (y * this.width + x) << 2;
     }
 };
 
@@ -193,56 +203,57 @@ WallRaycaster.prototype = {
 
 // ===============================================================
 
+function LevelRenderer(buffer) {
+    this.buffer = buffer;
+}
+LevelRenderer.prototype = {
+    renderView: function(view) {
+        var buffer = this.buffer;
+        var pixels = buffer.data;
+        var screenWidth = buffer.width;
+        var verticalStride = screenWidth * 4 - 3;
+
+        // go through all the columns
+        view.map(function(column, x) {
+            // and the strips in them
+            column.map(function(strip, s) {
+                if (strip.kind == S_END) return;
+
+                // calculate locations in the buffer where the strip starts/ends
+                var nextStrip = column[s+1];
+
+                // pick color based on strip type
+                var r, g, b;
+                switch(strip.kind) {
+                    case S_FLOOR:    r = g = b = 100; break;
+                    case S_CEILING:  r = g = b = 50; break;
+                    default:
+                        r = strip.color[0]; g = strip.color[1]; b = strip.color[2];
+                }
+
+                // draw a vertical uniform strip in the buffer
+                var startLoc = buffer.index(x, strip.topY),
+                    endLoc = buffer.index(x, nextStrip.topY);
+                for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
+                    pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
+                }
+            });
+        })
+    }
+};
+
+// ===============================================================
+
 function Renderer(canvas) {
     this.buffer = new Buffer(canvas);
     this.projection = new Projection(this.buffer, 60, 2.0);
     this.raycaster = new WallRaycaster(this.projection);
+    this.levelRenderer = new LevelRenderer(this.buffer);
 }
 Renderer.prototype = {
     renderFrame: function(pointOfView, levelMap) {
-        // prepare some constants for later
-        var buf = this.buffer.data;
-        var screenWidth = this.buffer.width;
-
-        // prepare our internal representation using raycasting
         var view = this.raycaster.projectWallsAndFloors(pointOfView, levelMap);
-
-        // draw the representation onto the buffer
-        drawColumns(view);
-
-        // 'flip' the buffer!
+        this.levelRenderer.renderView(view);
         this.buffer.show();
-
-        function drawColumns(columns) {
-            // go through all the columns
-            columns.map(function(column, x) {
-                // and the strips in them
-                column.map(function(strip, s) {
-                    if (strip.kind == S_END) return;
-
-                    // calculate locations in the buffer where the strip starts/ends
-                    var nextStrip = column[s+1];
-                    var startLoc = (strip.topY * screenWidth + x) * 4,
-                        endLoc = (nextStrip.topY * screenWidth + x) * 4,
-                        stride = screenWidth * 4 - 3;
-
-                    // pick color based on strip type
-                    var r, g, b;
-                    switch(strip.kind) {
-                        case S_FLOOR:    r = g = b = 100; break;
-                        case S_CEILING:  r = g = b = 50; break;
-                        default:
-                            r = strip.color[0]; g = strip.color[1]; b = strip.color[2];
-                    }
-
-                    // draw a vertical uniform strip in the buffer
-                    for (var loc = startLoc; loc < endLoc; loc += stride) {
-                        buf[loc++] = r; buf[loc++] = g; buf[loc++] = b;
-                    }
-                });
-            })
-        }
-    },
-
-    bufferData: function() { return this.buffer.data; }
+    }
 };
