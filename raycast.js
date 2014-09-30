@@ -85,10 +85,7 @@ var startDemo = function() {
 			this.context = canvas.getContext('2d');
 			this.buffer = this.setupBuffer();	
 
-			this.fov = deg2rad(60);
-			this.projectionDistance = 1.0 / Math.tan(this.fov / 2);
-			this.projectionWidth = 1.0;
-			this.projectionHeight = 1.0 * canvas.height / canvas.width;						
+			this.setupProjection();
 		},
 
 		setupBuffer: function() {
@@ -102,6 +99,28 @@ var startDemo = function() {
 
 			// return the buffer
 			return buffer;
+		},
+
+		setupProjection: function() {
+			var canvas = this.canvas, width = canvas.width;
+
+			// use a specific field of view in degrees
+			this.fov = deg2rad(60);
+			this.projectionWidth = 2.0;
+			this.projectionHeight = this.projectionWidth * canvas.height / canvas.width;						
+			this.projectionDistance = this.projectionWidth / Math.tan(this.fov / 2) / 2;
+
+			// cache projection information for each screen column
+			var projectionColumns = new Array(width);
+			var pxInc = 1 / width;
+			for (var x = 0, px = -0.5; x < width; x++, px += pxInc) {
+				var angle = Math.atan(px, this.projectionDistance);
+				projectionColumns[x] = {
+					relativeAngle: angle,
+					angleCosine:   Math.cos(angle)
+				};
+			}
+			this.projectionColumns = projectionColumns;
 		},
 
 		clearBuffer: function() {
@@ -123,6 +142,7 @@ var startDemo = function() {
 			var fieldOfView = self.fov;
 			var projectionDistance = self.projectionDistance;
 			var projectionHeight = self.projectionHeight;
+			var projectionColumns = self.projectionColumns;
 
 			// clean up
 			this.clearBuffer();
@@ -141,7 +161,6 @@ var startDemo = function() {
 				var columns = new Array(width), column;
 				var rayOrigin = gameState.player;
 				var eyeAngle = deg2rad(gameState.player.bearing);
-
 				// go through all the columns in the screen
 				for (var rx = 0; rx < width; rx++) {
 					// every column starts with just the floor and ceiling
@@ -152,11 +171,11 @@ var startDemo = function() {
 					];			
 
 					// look for the wall
-					var rayAngle = eyeAngle + (rx / width - 0.5) * fieldOfView; // TODO: seven kinds of wrong
+					var rayAngle = eyeAngle + projectionColumns[rx].relativeAngle;
 					var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);	
 
 					// project the wall strip
-					var z = zDistance(rayOrigin, eyeAngle, rayAngle, intersection.intersectedAt);
+					var z = zDistance(rayOrigin, intersection.intersectedAt, projectionColumns[rx].angleCosine);
 					var wall = projectWall(-0.5, 0.5, z);
 					
 					// insert the new strip, along with metadata
@@ -231,27 +250,29 @@ var startDemo = function() {
 						strips.splice(i, 0, newStrip);
 						// fix up the next strip's top to our bottom
 						nextStrip.topY = newStrip.bottomY;
-						delete newStrip.bottomY; // remove as no longer needed
 						return;
 					}
 				}
 			}
 
-			function zDistance(rayOrigin, eyeAngle, rayAngle, rayIntersection) {				
+			function zDistance(rayOrigin, rayIntersection, angularCorrection) {				
 				var distanceVec = {x: rayIntersection.x - rayOrigin.x, y: rayIntersection.y - rayOrigin.y}; // this is straight-line distance
 				var distance = Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
-				return distance * Math.cos(eyeAngle - rayAngle);
+				return distance * angularCorrection;
 			}
 
 			function projectWall(relativeTop, relativeBottom, zDistance) {							
 				// scale according to Z distance
 				var scalingFactor = projectionDistance / zDistance;
-				var top = (0.5 + relativeTop * scalingFactor) * height;
-				var bottom = (0.5 + relativeBottom * scalingFactor) * height;
-				if (top < 0) top = 0;
-				if (bottom > height) bottom = height;
+				var top = relativeTop * scalingFactor / projectionHeight;
+				var bottom = relativeBottom * scalingFactor / projectionHeight;
+				if (top < -0.5) top = -0.5;
+				if (bottom > 0.5) bottom = 0.5;
+
+				var screenTop = Math.round((0.5 + top) * height);
+				var screenBottom = Math.round((0.5 + bottom) * height);
 				
-				return {topY: Math.round(top), bottomY: Math.round(bottom)};
+				return {topY: screenTop, bottomY: screenBottom};
 			}
 
 
