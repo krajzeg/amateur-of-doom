@@ -1,19 +1,29 @@
 function startDemo() {
-    var world = new World(levelData, 10, 10);
 
-    var canvas = document.getElementById('screen');
-    var buffer = new Buffer(canvas);
-    var projection = new Projection(buffer, 60 /*degrees FOV*/, 2.0 /*projection width in world units*/);
-    var renderer = new Renderer(buffer, projection);
+    g_resourceManager.addTextures({
+        wall: 'assets/wall.png'
+    });
+    g_resourceManager.loadEverything()
+        .then(function() {
+            // prepare everything
+            var world = new World(levelData, 10, 10);
 
-    world.bindEvents();
+            var canvas = document.getElementById('screen');
+            var buffer = new Buffer(canvas);
+            var projection = new Projection(buffer, 60 /*degrees FOV*/, 2.0 /*projection width in world units*/);
+            var renderer = new Renderer(buffer, projection);
 
-    window.requestAnimationFrame(nextFrame);
+            // listen to the user
+            world.bindEvents();
 
-    function nextFrame() {
-        world.update();
-        renderer.renderFrame(world.player, world.level);
+            // start the show!
+            window.requestAnimationFrame(mainLoop);
+            function mainLoop() {
+                world.update();
+                renderer.renderFrame(world.player, world.level);
 
-        window.requestAnimationFrame(nextFrame);
-    }
+                window.requestAnimationFrame(mainLoop);
+            }
+        });
+
 }

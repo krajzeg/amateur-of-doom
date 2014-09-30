@@ -22,10 +22,12 @@ World.prototype = {
     parseLevel: function(levelData, levelWidth, levelHeight) {
         var cells = new Array(levelData.length);
 
-        for (i = 0; i < levelData.length; i++) {
+        var tWall = g_resourceManager.texture('wall');
+
+        for (var i = 0; i < levelData.length; i++) {
             switch(levelData.charAt(i)) {
                 case ' ': cells[i] = {floor: 0, ceiling: 1}; break;
-                case '#': cells[i] = {floor: 1, ceiling: 1}; break;
+                case '#': cells[i] = {floor: 1, ceiling: 1, wallTexture: tWall}; break;
             }
         }
 

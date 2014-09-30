@@ -111,7 +111,7 @@ WallRaycaster.prototype = {
 
             // insert the new strip, along with metadata
             wall.kind = S_WALL;
-            wall.color = [200, 200, 255];
+            wall.texture = intersection.withCell.wallTexture;
             insertStrip(column, wall);
 
             // store the finished column
@@ -167,7 +167,6 @@ WallRaycaster.prototype = {
                     return {
                         ray: {x: ray.x, y: ray.y},
                         intersectedAt: intersectionPoint,
-                        wallDirection: goingHorizontally ? WD_VERTICAL : WD_HORIZONTAL,
                         wallNormal: {x: goingHorizontally ? ray.sgnX : 0, y: goingHorizontally ? 0 : ray.sgnY},
                         withCell: cell
                     };
@@ -235,10 +234,11 @@ LevelRenderer.prototype = {
                 switch(strip.kind) {
                     case S_FLOOR:    r = g = b = 100; break;
                     case S_CEILING:  r = g = b = 50; break;
-                    default:
-                        r = strip.color[0] * strip.lighting;
-                        g = strip.color[1] * strip.lighting;
-                        b = strip.color[2] * strip.lighting;
+                    case S_WALL:
+                        var texture = strip.texture;
+                        r = texture.pixels[0] * strip.lighting;
+                        g = texture.pixels[1] * strip.lighting;
+                        b = texture.pixels[2] * strip.lighting;
                 }
 
                 // draw a vertical uniform strip in the buffer
