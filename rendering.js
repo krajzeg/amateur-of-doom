@@ -98,8 +98,12 @@ WallRaycaster.prototype = {
             var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
 
             // project the wall strip
-            var z = zDistance(rayOrigin, intersection.intersectedAt, projection.columns[rx].angleCosine);
+            var distance = distanceToWall(rayOrigin, intersection.intersectedAt);
+            var z = distance * projection.columns[rx].angleCosine;
             var wall = projectWall(-0.5, 0.5, z);
+
+            // light the wall
+            wall.lighting = Math.min(1.0, 2.0 / distance);
 
             // insert the new strip, along with metadata
             wall.kind = S_WALL;
@@ -166,10 +170,9 @@ WallRaycaster.prototype = {
             }
         }
 
-        function zDistance(rayOrigin, rayIntersection, angularCorrection) {
+        function distanceToWall(rayOrigin, rayIntersection) {
             var distanceVec = {x: rayIntersection.x - rayOrigin.x, y: rayIntersection.y - rayOrigin.y}; // this is straight-line distance
-            var distance = Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
-            return distance * angularCorrection;
+            return Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
         }
 
         function projectWall(relativeTop, relativeBottom, zDistance) {
@@ -228,7 +231,9 @@ LevelRenderer.prototype = {
                     case S_FLOOR:    r = g = b = 100; break;
                     case S_CEILING:  r = g = b = 50; break;
                     default:
-                        r = strip.color[0]; g = strip.color[1]; b = strip.color[2];
+                        r = strip.color[0] * strip.lighting;
+                        g = strip.color[1] * strip.lighting;
+                        b = strip.color[2] * strip.lighting;
                 }
 
                 // draw a vertical uniform strip in the buffer
@@ -244,16 +249,17 @@ LevelRenderer.prototype = {
 
 // ===============================================================
 
-function Renderer(canvas) {
-    this.buffer = new Buffer(canvas);
-    this.projection = new Projection(this.buffer, 60, 2.0);
-    this.raycaster = new WallRaycaster(this.projection);
-    this.levelRenderer = new LevelRenderer(this.buffer);
+function Renderer(buffer, projection) {
+    this.buffer = buffer;
+    this.projection = projection;
+
+    this.raycastingStep = new WallRaycaster(this.projection);
+    this.drawingStep = new LevelRenderer(this.buffer);
 }
 Renderer.prototype = {
     renderFrame: function(pointOfView, levelMap) {
-        var view = this.raycaster.projectWallsAndFloors(pointOfView, levelMap);
-        this.levelRenderer.renderView(view);
+        var view = this.raycastingStep.projectWallsAndFloors(pointOfView, levelMap);
+        this.drawingStep.renderView(view);
         this.buffer.show();
     }
 };
