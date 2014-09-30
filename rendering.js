@@ -78,6 +78,7 @@ WallRaycaster.prototype = {
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var screenCenterY = Math.ceil(screenHeight / 2);
         var projection = this.projection;
+        var lightPower = 5.0, diffuse = 0.4, ambient = 0.6;
 
         // where are we rendering from?
         var rayOrigin = {x: pointOfView.x, y: pointOfView.y};
@@ -102,8 +103,11 @@ WallRaycaster.prototype = {
             var z = distance * projection.columns[rx].angleCosine;
             var wall = projectWall(-0.5, 0.5, z);
 
-            // light the wall
-            wall.lighting = Math.min(1.0, 2.0 / distance);
+            // light the wall (simplified Phong lighting with no specularity)
+            var lighting = lightPower / distance / distance; // attenuation with distance
+            lighting *= ambient + diffuse * Math.abs(intersection.ray.x * intersection.wallNormal.x + intersection.ray.y * intersection.wallNormal.y); // simplified Phong
+            lighting = Math.min(1.0, lighting);
+            wall.lighting = lighting;
 
             // insert the new strip, along with metadata
             wall.kind = S_WALL;
@@ -164,6 +168,7 @@ WallRaycaster.prototype = {
                         ray: {x: ray.x, y: ray.y},
                         intersectedAt: intersectionPoint,
                         wallDirection: goingHorizontally ? WD_VERTICAL : WD_HORIZONTAL,
+                        wallNormal: {x: goingHorizontally ? ray.sgnX : 0, y: goingHorizontally ? 0 : ray.sgnY},
                         withCell: cell
                     };
                 }
