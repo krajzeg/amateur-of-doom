@@ -78,11 +78,12 @@ WallRaycaster.prototype = {
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var screenCenterY = Math.ceil(screenHeight / 2);
         var projection = this.projection;
-        var lightPower = 5.0, diffuse = 0.4, ambient = 0.6;
+        var lightPower = 8.0, diffuse = 0.4, ambient = 0.6;
 
         // where are we rendering from?
         var rayOrigin = {x: pointOfView.x, y: pointOfView.y};
         var eyeAngle = deg2rad(pointOfView.bearing);
+        var eyeElevation = pointOfView.elevation;
 
         // go through all the columns in the screen
         var columns = new Array(screenWidth), column;
@@ -101,7 +102,7 @@ WallRaycaster.prototype = {
             // project the wall strip
             var distance = distanceToWall(rayOrigin, intersection.intersectedAt);
             var z = distance * projection.columns[rx].angleCosine;
-            var wall = projectWall(-0.5, 0.5, z);
+            var wall = projectWall(0.0, 1.0, z);
 
             // light the wall (simplified Phong lighting with no specularity)
             var lighting = lightPower / distance / distance; // attenuation with distance
@@ -109,10 +110,12 @@ WallRaycaster.prototype = {
             lighting *= ambient + diffuse * Math.abs(intersection.ray.x * intersection.wallNormal.x + intersection.ray.y * intersection.wallNormal.y); // simplified Phong
             wall.lighting = lighting;
 
-            // insert the new strip, along with metadata
+            // complete the wall information
             wall.kind = S_WALL;
-            wall.texture = intersection.withCell.wallTexture;
-            wall.textureCoords = {u: intersection.textureU, topV: 0.0, bottomV: 1.0};
+            wall.texturing.texture = intersection.withCell.wallTexture;
+            wall.texturing.u = intersection.textureU;
+
+            // insert the new strip, along with metadata
             insertStrip(column, wall);
 
             // store the finished column
@@ -162,7 +165,7 @@ WallRaycaster.prototype = {
 
                 // we're in the next grid, did we hit?
                 var cell = cells[grid.y * lW + grid.x];
-                if (cell.floor > 0) {
+                if (cell.floor < 1) {
                     // yup! that's a wall!
                     var intersectionPoint = {x: grid.x + frac.x, y: grid.y + frac.y};
                     return {
@@ -181,18 +184,38 @@ WallRaycaster.prototype = {
             return Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
         }
 
-        function projectWall(relativeTop, relativeBottom, zDistance) {
+        function projectWall(top, bottom, zDistance) {
             // scale according to Z distance
             var scalingFactor = projection.distance / zDistance;
-            var top = relativeTop * scalingFactor / projection.height;
-            var bottom = relativeBottom * scalingFactor / projection.height;
-            if (top < -0.5) top = -0.5;
-            if (bottom > 0.5) bottom = 0.5;
 
-            var screenTop = Math.round((0.5 + top) * screenHeight);
-            var screenBottom = Math.round((0.5 + bottom) * screenHeight);
+            // texturing (before clipping)
+            var texVStart = top, texVEnd = bottom;
 
-            return {topY: screenTop, bottomY: screenBottom};
+            // world space to projection plane space
+            var relativeTop = top - eyeElevation, relativeBottom = bottom - eyeElevation;
+            var projectedTop = relativeTop * scalingFactor / projection.height;
+            var projectedBottom = relativeBottom * scalingFactor / projection.height;
+
+            // clip to screen
+            if (projectedTop < -0.5) {
+                // clip texture coordinates too
+                texVStart += (texVEnd - texVStart) * (-0.5 - projectedTop) / (projectedBottom - projectedTop);
+                projectedTop = -0.5;
+            }
+            if (projectedBottom > 0.5)
+            {
+                texVEnd -= (texVEnd - texVStart) * (projectedBottom - 0.5) / (projectedBottom - projectedTop);
+                projectedBottom = 0.5;
+            }
+
+            // projection plane space to screen space
+            var screenTop = Math.round((0.5 + projectedTop) * screenHeight);
+            var screenBottom = Math.round((0.5 + projectedBottom) * screenHeight);
+
+            return {
+                topY: screenTop, bottomY: screenBottom,
+                texturing: {topV: texVStart, bottomV: texVEnd}
+            };
         }
 
         function insertStrip(strips, newStrip) {
@@ -254,38 +277,60 @@ LevelRenderer.prototype = {
         });
 
         function drawTexturedStrip(stripX, strip, nextStrip) {
-            var texture = strip.texture;
+            // TODO: add support for wrapping textures
+            // TODO: use clipping information
+
+            var texturingInfo = strip.texturing;
+            var texture = texturingInfo.texture;
             var lighting = strip.lighting;
+
             var tex = texture.pixels, buf = buffer.data;
 
-            var texX = Math.floor(texture.width * strip.textureCoords.u);
-            var texStride = texture.width * 4;
-            var texLoc = texX * 4;
+            // calculate starting UV coordinates for texturing
+            var texU = Math.floor(texture.height * texturingInfo.u);
+            var texV = Math.floor(texture.width * texturingInfo.topV);
+            var texLoc = texU * texture.width + texV;
 
-            var texFracY = 0, texYStep = texture.height / (nextStrip.topY - strip.topY);
+            // calculate how fast we should step through the texture (V per screen pixel)
+            var texVStep = texture.width * (texturingInfo.bottomV - texturingInfo.topV) / (nextStrip.topY - strip.topY);
 
+            // start the counter we will be using to step through texture pixels (counts fractional texels)
+            var texFracV = texture.width * texturingInfo.topV - texV;
+
+            // extract first texel
             var r, g, b;
-            r = tex[texLoc] * lighting;
-            g = tex[texLoc+1] * lighting;
-            b = tex[texLoc+2] * lighting;
+            var texel = tex[texLoc];
+            // calculate pixel color based on texel
+            r = (texel & 0xff) * lighting;
+            g = ((texel >> 8) & 0xff) * lighting;
+            b = ((texel >> 16) & 0xff) * lighting;
 
-            // for now, we assume (wrongly!) that the strip covers the whole texture vertically exactly once
+            // go through the whole strip vertically
             var startLoc = buffer.index(stripX, strip.topY),
                 endLoc = buffer.index(stripX, nextStrip.topY);
             for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
+                // draw the pixel
                 buf[loc++] = r; buf[loc++] = g; buf[loc++] = b;
 
-                // increment our texture pixel counter
-                texFracY += texYStep;
-                if (texFracY > 0) {
-                    // the texel is no longer correct, move down the texture
-                    var steps = Math.floor(texFracY);
-                    texLoc += texStride * steps;
-                    texFracY -= steps;
+                // move through the texture
+                texFracV += texVStep;
+                if (texFracV > 1) {
+                    if (texFracV > 2) {
+                        // we have to move more than one pixel down - do the more expensive calculation
+                        var steps = Math.floor(texFracV);
+                        texLoc += steps;
+                        texFracV -= steps;
+                    } else {
+                        // one pixel at a time is easy and fast
+                        texLoc++;
+                        texFracV--;
+                    }
 
-                    r = tex[texLoc] * lighting;
-                    g = tex[texLoc+1] * lighting;
-                    b = tex[texLoc+2] * lighting;
+                    // calculate new color to draw with based on the new texel
+                    var texel = tex[texLoc];
+                    r = (texel & 0xff) * lighting;
+                    g = ((texel >> 8) & 0xff) * lighting;
+                    b = ((texel >> 16) & 0xff) * lighting;
                 }
             }
         }

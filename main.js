@@ -1,7 +1,7 @@
 function startDemo() {
 
     g_resourceManager.addTextures({
-        wall: 'assets/wall.png'
+        wall: 'assets/wall64.png'
     });
     g_resourceManager.loadEverything()
         .then(function() {

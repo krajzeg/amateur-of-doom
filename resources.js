@@ -11,7 +11,6 @@ Texture.prototype = {
                 resolve(self);
             };
             img.src = self.fileName;
-
         });
     },
 
@@ -27,8 +26,12 @@ Texture.prototype = {
         var context = canvas.getContext('2d');
 
         // draw onto the canvas and get the buffer
+        // we draw the image rotaetd and flipped to allow us to use
+        // horizontal lines during texturing (the CPU cache is much happier then!)
+        context.rotate(-Math.PI/2);
+        context.scale(-1, 1);
         context.drawImage(loadedImage, 0, 0);
-        this.pixels = context.getImageData(0, 0, this.width, this.height).data;
+        this.pixels = new Uint32Array(context.getImageData(0, 0, this.width, this.height).data.buffer);
     }
 };
 
