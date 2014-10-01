@@ -1,7 +1,7 @@
-// "Strip" types - every vertical strip in a colum will be one of these.
-var S_FLOOR = 'floor', S_CEILING = 'ceiling', S_WALL = 'wall', S_END = 'end';
-// Wall directions for intersections information
-var WD_HORIZONTAL = 'h', WD_VERTICAL = 'v';
+// "Strip" types - every vertical strip in a column will be one of these.
+var S_DUMMY = 'strip:dummy', S_FLOOR = 'strip:floor', S_CEILING = 'strip:ceiling', S_WALL = 'strip:wall', S_END = 'strip:end';
+// "Span" types - every horizontal span will be one of these.
+var SP_FLOOR = 'span:floor', SP_CEILING = 'span:ceiling';
 
 // ===============================================================
 
@@ -73,7 +73,7 @@ function WallRaycaster(projection) {
     this.projection = projection;
 }
 WallRaycaster.prototype = {
-    projectWallsAndFloors: function(pointOfView, levelMap) {
+    projectWalls: function(pointOfView, levelMap) {
         // how are we projecting this thing?
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var screenCenterY = Math.ceil(screenHeight / 2);
@@ -85,13 +85,16 @@ WallRaycaster.prototype = {
         var eyeAngle = deg2rad(pointOfView.bearing);
         var eyeElevation = pointOfView.elevation;
 
+        // what are the floor/ceiling elevations we should start with?
+        var baseFloor = 1, baseCeiling = 0;
+
         // go through all the columns in the screen
         var columns = new Array(screenWidth), column;
         for (var rx = 0; rx < screenWidth; rx++) {
             // every column starts with just the floor and ceiling
             column = [
-                {kind: S_CEILING, topY: 0},
-                {kind: S_FLOOR, topY: screenCenterY},
+                {kind: S_CEILING, topY: 0, elevation: baseCeiling},
+                {kind: S_FLOOR, topY: screenCenterY, elevation: baseFloor},
                 {kind: S_END, topY: screenHeight} // sentinel value for simplifying various algorithms
             ];
 
@@ -235,6 +238,73 @@ WallRaycaster.prototype = {
 
 // ===============================================================
 
+/**
+ * Responsible for inferring the position of flat surfaces (floors, ceilings)
+ * from projected wall information, and transforming it into horizontal spans
+ * ready to be drawn.
+ *
+ * Basically transform from columns to rows like this.
+ *
+ *   ||||||        ------
+ *  ||||||   =>   ------
+ * |||||         -----
+ *
+ * @param {Projection} projection the Projection to use
+ * @constructor
+ */
+function SpanCollector(projection) {
+    this.projection = projection;
+}
+SpanCollector.prototype = {
+    /**
+     * Processes walls to make spans, see class description.
+     * @param projectedWalls the wall data from WallRaycaster
+     */
+    inferFloorsAndCeilings: function(projectedWalls) {
+        var screenWidth = projection.screenWidth, screenHeight = projection.screenHeight;
+
+        // we'll be working on a copy of the wall data, as we'd like to remove/modify strips we've processed
+        // we also filter the copy so it only has floors and ceilings, no distractions
+        var columns = projectedWalls.map(function(column) {
+            return column.filter(function(strip) {
+                // only floors and ceilings
+                return strip.kind == S_CEILING || strip.kind == S_FLOOR;
+            }).map(function(strip) {
+                // create independent copies so we can freely modify them
+                return JSON.parse(JSON.stringify(strip));
+            });
+        });
+
+        // we cap off the copy with a fake column which will act as a sentinel during our flood fills below
+        // that way, we don't have to check for going past screen width
+        columns.push([{kind: S_DUMMY, topY: 0}, {kind: S_END, topY: screenHeight}]);
+
+        var spans = [];
+        _.map(columns, function(column, colX) {
+            while (column.length) {
+                // there is an unprocessed strip in this column
+                // flood-fill a span starting from that strip
+                var strip = column[0];
+                spans.push(this.findACompleteSpan(strip, columns, colX));
+            }
+        });
+    },
+
+    /**
+     * Finds a complete floor/ceiling span starting with the given vertical strip,
+     * and DESTRUCTIVELY REMOVES all strips that went into that span from the
+     * column array. If a strip was only partially used, its top/bottom values will
+     * be MODIFIED to reflect that.
+     *
+     *
+     */
+    findACompleteSpan: function(startStrip, columns, startingX) {
+        
+    }
+};
+
+// ===============================================================
+
 function LevelRenderer(buffer) {
     this.buffer = buffer;
 }
@@ -278,7 +348,6 @@ LevelRenderer.prototype = {
 
         function drawTexturedStrip(stripX, strip, nextStrip) {
             // TODO: add support for wrapping textures
-            // TODO: use clipping information
 
             var texturingInfo = strip.texturing;
             var texture = texturingInfo.texture;
@@ -348,7 +417,7 @@ function Renderer(buffer, projection) {
 }
 Renderer.prototype = {
     renderFrame: function(pointOfView, levelMap) {
-        var view = this.raycastingStep.projectWallsAndFloors(pointOfView, levelMap);
+        var view = this.raycastingStep.projectWalls(pointOfView, levelMap);
         this.drawingStep.renderView(view);
         this.buffer.show();
     }
