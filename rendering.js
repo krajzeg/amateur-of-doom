@@ -1,5 +1,5 @@
 // "Strip" types - every vertical strip in a column will be one of these.
-var S_DUMMY = 'strip:dummy', S_FLOOR = 'strip:floor', S_CEILING = 'strip:ceiling', S_WALL = 'strip:wall', S_END = 'strip:end';
+var S_DUMMY = 'strip:dummy', S_FLOOR = 'strip:floor', S_CEILING = 'strip:ceiling', S_WALL = 'strip:wall';
 // "Span" types - every horizontal span will be one of these.
 var SP_FLOOR = 'span:floor', SP_CEILING = 'span:ceiling';
 
@@ -78,6 +78,8 @@ WallRaycaster.prototype = {
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var screenCenterY = Math.ceil(screenHeight / 2);
         var projection = this.projection;
+
+        // how are we lighting it?
         var lightPower = 8.0, diffuse = 0.4, ambient = 0.6;
 
         // where are we rendering from?
@@ -88,17 +90,13 @@ WallRaycaster.prototype = {
         // what are the floor/ceiling elevations we should start with?
         var baseFloor = 1, baseCeiling = 0;
 
-        // go through all the columns in the screen
+        // OK, Mr. Raycaster, go through all the columns on the screen
         var columns = new Array(screenWidth), column;
         for (var rx = 0; rx < screenWidth; rx++) {
-            // every column starts with just the floor and ceiling
-            column = [
-                {kind: S_CEILING, topY: 0, elevation: baseCeiling},
-                {kind: S_FLOOR, topY: screenCenterY, elevation: baseFloor},
-                {kind: S_END, topY: screenHeight} // sentinel value for simplifying various algorithms
-            ];
+            // every column starts empty
+            column = [];
 
-            // look for the wall
+            // look for a wall (there will be one)
             var rayAngle = eyeAngle + projection.columns[rx].relativeAngle;
             var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
 
@@ -118,8 +116,14 @@ WallRaycaster.prototype = {
             wall.texturing.texture = intersection.withCell.wallTexture;
             wall.texturing.u = intersection.textureU;
 
-            // insert the new strip, along with metadata
+            // insert the new strip in the right place in the column
             insertStrip(column, wall);
+
+            // cap the column off with a floor and ceiling if needed
+            if (column[0].topY != 0)
+                column.unshift({kind: S_CEILING, elevation: baseCeiling, topY: 0, bottomY: column[0].topY});
+            if (_.last(column).bottomY != screenHeight)
+                column.push({kind: S_FLOOR, elevation: baseFloor, topY: _.last(column).bottomY, bottomY: screenHeight});
 
             // store the finished column
             columns[rx] = column;
@@ -221,19 +225,30 @@ WallRaycaster.prototype = {
             };
         }
 
+        /**
+         * Inserts a new strip into a column, keeping them nicely sorted
+         * top to bottom.
+         *
+         * @param strips existing strips
+         * @param newStrip the new strip to add
+         */
         function insertStrip(strips, newStrip) {
-            for (var i = 1; ; i++) {
-                var nextStrip = strips[i];
-                if (nextStrip.topY > newStrip.topY) {
-                    // insert here
+            if (strips.length == 0) {
+                // nobody else here, happy coincidence
+                strips.push(newStrip);
+                return;
+            }
+
+            // look for the right place
+            for (var i = 0; i < strips.length; i++) {
+                if (strips[i].bottomY > newStrip.bottomY) {
+                    // this is the place
                     strips.splice(i, 0, newStrip);
-                    // fix up the top of next strip to our bottom
-                    nextStrip.topY = newStrip.bottomY;
                     return;
                 }
             }
         }
-    }
+     }
 };
 
 // ===============================================================
@@ -299,7 +314,7 @@ SpanCollector.prototype = {
      *
      */
     findACompleteSpan: function(startStrip, columns, startingX) {
-        
+
     }
 };
 
@@ -319,14 +334,9 @@ LevelRenderer.prototype = {
         view.map(function(column, x) {
             // and the strips in them
             column.map(function(strip, s) {
-                if (strip.kind == S_END) return;
-
-                // calculate locations in the buffer where the strip starts/ends
-                var nextStrip = column[s+1];
-
                 // wall?
                 if (strip.kind == S_WALL) {
-                    drawTexturedStrip(x, strip, nextStrip);
+                    drawTexturedStrip(x, strip);
                     return;
                 }
 
@@ -339,14 +349,14 @@ LevelRenderer.prototype = {
 
                 // draw a vertical uniform strip in the buffer
                 var startLoc = buffer.index(x, strip.topY),
-                    endLoc = buffer.index(x, nextStrip.topY);
+                    endLoc = buffer.index(x, strip.bottomY);
                 for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
                     pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
                 }
             });
         });
 
-        function drawTexturedStrip(stripX, strip, nextStrip) {
+        function drawTexturedStrip(stripX, strip) {
             // TODO: add support for wrapping textures
 
             var texturingInfo = strip.texturing;
@@ -361,7 +371,7 @@ LevelRenderer.prototype = {
             var texLoc = texU * texture.width + texV;
 
             // calculate how fast we should step through the texture (V per screen pixel)
-            var texVStep = texture.width * (texturingInfo.bottomV - texturingInfo.topV) / (nextStrip.topY - strip.topY);
+            var texVStep = texture.width * (texturingInfo.bottomV - texturingInfo.topV) / (strip.bottomY - strip.topY);
 
             // start the counter we will be using to step through texture pixels (counts fractional texels)
             var texFracV = texture.width * texturingInfo.topV - texV;
@@ -376,7 +386,7 @@ LevelRenderer.prototype = {
 
             // go through the whole strip vertically
             var startLoc = buffer.index(stripX, strip.topY),
-                endLoc = buffer.index(stripX, nextStrip.topY);
+                endLoc = buffer.index(stripX, strip.bottomY);
             for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
                 // draw the pixel
                 buf[loc++] = r; buf[loc++] = g; buf[loc++] = b;
@@ -396,7 +406,7 @@ LevelRenderer.prototype = {
                     }
 
                     // calculate new color to draw with based on the new texel
-                    var texel = tex[texLoc];
+                    texel = tex[texLoc];
                     r = (texel & 0xff) * lighting;
                     g = ((texel >> 8) & 0xff) * lighting;
                     b = ((texel >> 16) & 0xff) * lighting;
