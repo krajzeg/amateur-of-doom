@@ -191,6 +191,14 @@ WallRaycaster.prototype = {
                     frac.x += ray.sgnX * yDist * ray.ratioXY;
                 }
 
+                // texturing coordinate
+                var u;
+                if (goingHorizontally) {
+                    u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
+                } else {
+                    u = (ray.y > 0) ? frac.x : (1.0 - frac.x);
+                }
+
                 // we're in the next grid, did we hit?
                 var cell = cells[grid.y * lW + grid.x];
                 if (cell.floor < 1) {
