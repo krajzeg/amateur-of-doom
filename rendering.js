@@ -444,7 +444,15 @@ SpanCollector.prototype = {
             };
 
             // light this thing
-            var lighting = Math.min(1.0, 8.0 / unprojected.playerSpaceZ / unprojected.playerSpaceZ);
+            var ambient = 0.5, diffuse = 0.5;
+            var distance = unprojected.playerSpaceZ;
+            var lighting = 8.0 / distance / distance; // attenuation with distance
+            lighting = Math.min(1.0, lighting);
+
+            // take reflection angle into account
+            var ray = {x: pointOfView.z, y: pointOfView.elevation - elevation};
+            var reflectionCoefficient = Math.abs(ray.y);
+            lighting *= ambient + diffuse * reflectionCoefficient;
 
             // return
             return {
