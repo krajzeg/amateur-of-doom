@@ -298,6 +298,9 @@ SpanCollector.prototype = {
                 spans.push(self.findACompleteSpan(strip, columns, colX));
             }
         });
+
+        // done!
+        return spans;
     },
 
     /**
@@ -414,9 +417,30 @@ function LevelRenderer(buffer) {
     this.buffer = buffer;
 }
 LevelRenderer.prototype = {
-    renderView: function(view) {
+    renderSpans: function(spans) {
+        var buffer = this.buffer, pixels = buffer.data;
+        var r, g, b, startLoc, endLoc;
+
+        spans.map(function drawSpan(span) {
+
+            switch(span.kind) {
+                case S_FLOOR:    r = g = b = 100; break;
+                case S_CEILING:  r = g = b = 50; break;
+            }
+
+            // draw all the rows
+            span.rows.map(function(row) {
+                startLoc = buffer.index(row.startX, row.y);
+                endLoc = buffer.index(row.endX, row.y);
+                for (var loc = startLoc; loc < endLoc; loc++) {
+                    pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
+                }
+            });
+        });
+    },
+
+    renderWalls: function(view) {
         var buffer = this.buffer;
-        var pixels = buffer.data;
         var screenWidth = buffer.width;
         var verticalStride = screenWidth * 4 - 3;
 
@@ -425,24 +449,8 @@ LevelRenderer.prototype = {
             // and the strips in them
             column.map(function(strip, s) {
                 // wall?
-                if (strip.kind == S_WALL) {
+                if (strip.kind == S_WALL)
                     drawTexturedStrip(x, strip);
-                    return;
-                }
-
-                // not a wall, pick a solid color based on strip type
-                var r, g, b;
-                switch(strip.kind) {
-                    case S_FLOOR:    r = g = b = 100; break;
-                    case S_CEILING:  r = g = b = 50; break;
-                }
-
-                // draw a vertical uniform strip in the buffer
-                var startLoc = buffer.index(x, strip.topY),
-                    endLoc = buffer.index(x, strip.bottomY);
-                for (var loc = startLoc; loc < endLoc; loc += verticalStride) {
-                    pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
-                }
             });
         });
 
@@ -520,7 +528,10 @@ Renderer.prototype = {
     renderFrame: function(pointOfView, levelMap) {
         var walls = this.raycastingStep.projectWalls(pointOfView, levelMap);
         var spans = this.spansStep.inferFloorsAndCeilings(walls);
-        this.drawingStep.renderView(walls);
+
+        this.drawingStep.renderWalls(walls);
+        this.drawingStep.renderSpans(spans);
+
         this.buffer.show();
     }
 };
