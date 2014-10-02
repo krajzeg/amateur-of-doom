@@ -1,5 +1,6 @@
-function Texture(fileName) {
-    this.fileName = fileName;
+function Texture(description) {
+    this.fileName = description.file;
+    this.prerotated = !!description.prerotated;
 }
 Texture.prototype = {
     load: function() {
@@ -26,10 +27,12 @@ Texture.prototype = {
         var context = canvas.getContext('2d');
 
         // draw onto the canvas and get the buffer
-        // we draw the image rotaetd and flipped to allow us to use
-        // horizontal lines during texturing (the CPU cache is much happier then!)
-        context.rotate(-Math.PI/2);
-        context.scale(-1, 1);
+        if (this.prerotated) {
+            // for wall textures, we draw the image rotated and flipped to allow us to use
+            // horizontal lines during texturing (the CPU cache is much happier then!)
+            context.rotate(-Math.PI / 2);
+            context.scale(-1, 1);
+        }
         context.drawImage(loadedImage, 0, 0);
         this.pixels = new Uint32Array(context.getImageData(0, 0, this.width, this.height).data.buffer);
     }
@@ -48,8 +51,8 @@ ResourceManager.prototype = {
 
     loadEverything: function() {
         var self = this;
-        return Q.all(_.map(self.texturesToLoad, function(fileName, textureName) {
-            var texture = new Texture(fileName);
+        return Q.all(_.map(self.texturesToLoad, function(description, textureName) {
+            var texture = new Texture(description);
             self.textures[textureName] = texture;
             return texture.load();
         }));

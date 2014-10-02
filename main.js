@@ -1,7 +1,8 @@
 function startDemo() {
 
     g_resourceManager.addTextures({
-        wall: 'assets/wall64.png'
+        wall: {file: 'assets/wall64.png', prerotated: true},
+        floor: {file: 'assets/floor64.png'}
     });
     g_resourceManager.loadEverything()
         .then(function() {
