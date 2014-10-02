@@ -17,6 +17,7 @@ function World(levelData, levelWidth, levelHeight) {
     this.player = {x: 4, y: 4, elevation: 0.5, bearing: 29};
     this.level = this.parseLevel(levelData, levelWidth, levelHeight);
     this.keyState = {};
+    this.update();
 }
 World.prototype = {
     parseLevel: function(levelData, levelWidth, levelHeight) {

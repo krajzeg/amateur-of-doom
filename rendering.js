@@ -48,7 +48,7 @@ Projection.prototype = {
         var mapY = pointOfView.y + unitZ.y * psZ + unitX.y * psX;
 
         // return
-        return {mapX: mapX, mapY: mapY};
+        return {mapX: mapX, mapY: mapY, playerSpaceX: psX, playerSpaceZ: psZ};
     }
 };
 
@@ -294,15 +294,16 @@ function SpanCollector(projection) {
 SpanCollector.prototype = {
     /**
      * Processes walls to make spans, see class description.
+     * @param pointOfView the point of view object with x, y, coordinateSpace, elevation
      * @param projectedWalls the wall data from WallRaycaster
      */
-    inferFloorsAndCeilings: function(projectedWalls) {
+    inferFloorsAndCeilings: function(pointOfView, projectedWalls) {
         var self = this;
 
         // we'll be working on a copy of the wall data, as we'd like to remove/modify strips we've processed
         // we also filter the copy so it only has floors and ceilings, no distractions
         var columns = projectedWalls.map(function copyColumns(column) {
-            return column.filter(function(strip) {
+            return column.filter(function (strip) {
                 // only floors and ceilings
                 return strip.kind == S_CEILING || strip.kind == S_FLOOR;
             });
@@ -318,125 +319,137 @@ SpanCollector.prototype = {
                 // there is an unprocessed strip in this column
                 // flood-fill a span starting from that strip
                 var strip = column.shift();
-                spans.push(self.findACompleteSpan(strip, columns, colX));
+                spans.push(findACompleteSpan(strip, columns, colX));
             }
         });
 
         // done!
         return spans;
-    },
 
-    /**
-     * Finds a complete floor/ceiling span starting with the given vertical strip,
-     * and DESTRUCTIVELY REMOVES all strips that went into that span from the
-     * column array. If a strip was only partially used, its top/bottom values will
-     * be MODIFIED to reflect that.
-     *
-     * @param strip the leftmost strip used for finding the rest of the span
-     * @param columns the column table
-     * @param startingX the X position of the starting strip
-     */
-    findACompleteSpan: function(strip, columns, startingX) {
-        var self = this;
-        var screenHeight = this.projection.screenHeight;
 
-        // start with the first strip
-        var span = {
-            kind: strip.kind,
-            elevation: strip.elevation,
+        // ===== span collecting substeps below (closures)
 
-            // topY-bottomY is the full 'bounding box' of the span
-            topY: strip.topY,
-            bottomY: strip.bottomY
-        };
-        var rows = new Array(screenHeight);
-        for (var y = strip.topY; y < strip.bottomY; y++) {
-            rows[y] = this.projectRowAt(startingX, y);
-        }
+        /**
+         * Finds a complete floor/ceiling span starting with the given vertical strip,
+         * and DESTRUCTIVELY REMOVES all strips that went into that span from the
+         * column array. If a strip was only partially used, its top/bottom values will
+         * be MODIFIED to reflect that.
+         *
+         * @param strip the leftmost strip used for finding the rest of the span
+         * @param columns the column table
+         * @param startingX the X position of the starting strip
+         */
+        function findACompleteSpan(strip, columns, startingX) {
+            var screenHeight = self.projection.screenHeight;
 
-        // flood fill following columns
-        var columnX = startingX + 1;
-        var activeStrip = strip;
+            // start with the first strip
+            var span = {
+                kind: strip.kind,
+                elevation: strip.elevation,
 
-        // this loop will be broken out of by returing the finished span
-        while (true) {
-            var column = columns[columnX];
-
-            // find the next strip to include in the span
-            var newStrip = null;
-            for (var stripIndex = 0; stripIndex < column.length; stripIndex++) {
-                var candidate = column[stripIndex];
-
-                // does this match our span?
-                if (candidate.elevation != span.elevation)
-                    continue;
-                // it's the same elevation, but what if it does not connect to the span?
-                if ((candidate.topY >= activeStrip.bottomY) || (candidate.bottomY < activeStrip.topY))
-                    continue;
-                // check if all the rows this strip has can still be extended
-                if ((candidate.bottomY > activeStrip.bottomY) && (candidate.bottomY < span.bottomY))
-                    continue;
-                if ((candidate.topY < activeStrip.topY) && (candidate.topY >= span.topY))
-                    continue;
-
-                // by this point, the strip has passed the gauntlet and will be used
-                newStrip = candidate;
-                column.splice(stripIndex, 1); // remove it from column list, it has served its purpose
-
-                // new rows at the top?
-                if (candidate.topY < activeStrip.topY) {
-                    for (y = candidate.topY; y < activeStrip.topY; y++)
-                        rows[y] = self.projectRowAt(columnX, y);
-                    span.topY = candidate.topY;
-                }
-                // new rows at the bottom?
-                if (candidate.bottomY > activeStrip.bottomY) {
-                    for (y = activeStrip.bottomY; y < candidate.bottomY; y++)
-                        rows[y] = self.projectRowAt(columnX, y);
-                    span.bottomY = candidate.bottomY;
-                }
-
-                // rows to close at the top?
-                if (activeStrip.topY < candidate.topY) {
-                    for (y = activeStrip.topY; y < candidate.topY; y++)
-                        rows[y].endX = columnX;
-                }
-                // rows to close at the bottom?
-                if (activeStrip.bottomY > candidate.bottomY) {
-                    for (y = candidate.bottomY; y < activeStrip.bottomY; y++)
-                        rows[y].endX = columnX;
-                }
-
-                // done!
-                break;
+                // topY-bottomY is the full 'bounding box' of the span
+                topY: strip.topY,
+                bottomY: strip.bottomY
+            };
+            var rows = new Array(screenHeight);
+            for (var y = strip.topY; y < strip.bottomY; y++) {
+                rows[y] = projectRowAt(startingX, y, span.elevation);
             }
 
-            if (!newStrip) {
-                // no more strips - close off remaining rows
-                for (y = activeStrip.topY; y < activeStrip.bottomY; y++)
-                    rows[y].endX = columnX;
+            // flood fill following columns
+            var columnX = startingX + 1;
+            var activeStrip = strip;
 
-                // clean the 'rows' array up to just the rows that were actually used
-                span.rows = [].concat(rows.slice(span.topY, span.bottomY));
+            // this loop will be broken out of by returing the finished span
+            while (true) {
+                var column = columns[columnX];
 
-                // return the finished span!
-                return span;
-            } else {
-                // next column, new active strip
-                columnX++;
-                activeStrip = newStrip;
+                // find the next strip to include in the span
+                var newStrip = null;
+                for (var stripIndex = 0; stripIndex < column.length; stripIndex++) {
+                    var candidate = column[stripIndex];
+
+                    // does this match our span?
+                    if (candidate.elevation != span.elevation)
+                        continue;
+                    // it's the same elevation, but what if it does not connect to the span?
+                    if ((candidate.topY >= activeStrip.bottomY) || (candidate.bottomY < activeStrip.topY))
+                        continue;
+                    // check if all the rows this strip has can still be extended
+                    if ((candidate.bottomY > activeStrip.bottomY) && (candidate.bottomY < span.bottomY))
+                        continue;
+                    if ((candidate.topY < activeStrip.topY) && (candidate.topY >= span.topY))
+                        continue;
+
+                    // by this point, the strip has passed the gauntlet and will be used
+                    newStrip = candidate;
+                    column.splice(stripIndex, 1); // remove it from column list, it has served its purpose
+
+                    // new rows at the top?
+                    if (candidate.topY < activeStrip.topY) {
+                        for (y = candidate.topY; y < activeStrip.topY; y++)
+                            rows[y] = projectRowAt(columnX, y, span.elevation);
+                        span.topY = candidate.topY;
+                    }
+                    // new rows at the bottom?
+                    if (candidate.bottomY > activeStrip.bottomY) {
+                        for (y = activeStrip.bottomY; y < candidate.bottomY; y++)
+                            rows[y] = projectRowAt(columnX, y, span.elevation);
+                        span.bottomY = candidate.bottomY;
+                    }
+
+                    // rows to close at the top?
+                    if (activeStrip.topY < candidate.topY) {
+                        for (y = activeStrip.topY; y < candidate.topY; y++)
+                            rows[y].endX = columnX;
+                    }
+                    // rows to close at the bottom?
+                    if (activeStrip.bottomY > candidate.bottomY) {
+                        for (y = candidate.bottomY; y < activeStrip.bottomY; y++)
+                            rows[y].endX = columnX;
+                    }
+
+                    // done!
+                    break;
+                }
+
+                if (!newStrip) {
+                    // no more strips - close off remaining rows
+                    for (y = activeStrip.topY; y < activeStrip.bottomY; y++)
+                        rows[y].endX = columnX;
+
+                    // clean the 'rows' array up to just the rows that were actually used
+                    span.rows = [].concat(rows.slice(span.topY, span.bottomY));
+
+                    // return the finished span!
+                    return span;
+                } else {
+                    // next column, new active strip
+                    columnX++;
+                    activeStrip = newStrip;
+                }
             }
         }
-    },
 
-    projectRowAt: function(x, y) {
-        return {
-            startX: x, endX: null, // start at 'x', ends who knows where (yet)
-            y: y,
+        function projectRowAt(x, y, elevation) {
+            // get texturing info
+            var unprojected = self.projection.unprojectPoint(pointOfView, x, y, elevation);
+            var distancePerPixel = self.projection.width / self.projection.screenWidth;
+            var scalingFactor = distancePerPixel * self.projection.distance / unprojected.playerSpaceZ;
+            var textureDir = pointOfView.coordinateSpace.x;
 
-            // fake texturing for now
-            texturing: {u: (x % 64) / 64, v: (y % 64) / 64, uStep: 0.5 / 64, vStep: 0.5 / 64}
-        };
+            var texturing = {
+                u: unprojected.mapX % 1, v: unprojected.mapY % 1,
+                uStep: textureDir.x * scalingFactor, vStep: textureDir.y * scalingFactor
+            };
+            // return
+            return {
+                startX: x, endX: null, // start at 'x', ends who knows where (yet)
+                y: y,
+                texturing: texturing
+            };
+        }
+
     }
 };
 
@@ -589,7 +602,7 @@ function Renderer(buffer, projection) {
 Renderer.prototype = {
     renderFrame: function(pointOfView, levelMap) {
         var walls = this.raycastingStep.projectWalls(pointOfView, levelMap);
-        var spans = this.spansStep.inferFloorsAndCeilings(walls);
+        var spans = this.spansStep.inferFloorsAndCeilings(pointOfView, walls);
 
         this.drawingStep.renderWalls(walls);
         this.drawingStep.renderSpans(spans);
