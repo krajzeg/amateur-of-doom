@@ -327,7 +327,7 @@ SpanCollector.prototype = {
         };
         var rows = new Array(screenHeight);
         for (var y = strip.topY; y < strip.bottomY; y++) {
-            rows[y] = this.startNewRow(startingX, y);
+            rows[y] = this.projectRowAt(startingX, y);
         }
 
         // flood fill following columns
@@ -362,13 +362,13 @@ SpanCollector.prototype = {
                 // new rows at the top?
                 if (candidate.topY < activeStrip.topY) {
                     for (y = candidate.topY; y < activeStrip.topY; y++)
-                        rows[y] = self.startNewRow(columnX, y);
+                        rows[y] = self.projectRowAt(columnX, y);
                     span.topY = candidate.topY;
                 }
                 // new rows at the bottom?
                 if (candidate.bottomY > activeStrip.bottomY) {
                     for (y = activeStrip.bottomY; y < candidate.bottomY; y++)
-                        rows[y] = self.startNewRow(columnX, y);
+                        rows[y] = self.projectRowAt(columnX, y);
                     span.bottomY = candidate.bottomY;
                 }
 
@@ -405,13 +405,13 @@ SpanCollector.prototype = {
         }
     },
 
-    startNewRow: function(x, y) {
+    projectRowAt: function(x, y) {
         return {
             startX: x, endX: null, // start at 'x', ends who knows where (yet)
             y: y,
 
             // fake texturing for now
-            texturing: {u: x % 64, v: y % 64, uStep: 1 / 64, vStep: 0}
+            texturing: {u: (x % 64) / 64, v: (y % 64) / 64, uStep: 0.5 / 64, vStep: 0.5 / 64}
         };
     }
 };
@@ -432,19 +432,46 @@ LevelRenderer.prototype = {
             span.rows.map(function drawRow(row) {
                 var startLoc = buffer.index(row.startX, row.y),
                     endLoc = buffer.index(row.endX, row.y);
-                var u = Math.floor(row.texturing.u), uFrac = row.texturing.u - u, uStep = row.texturing.uStep * texWidth;
-                var v = Math.floor(row.texturing.v), vFrac = row.texturing.v - v, vStep = row.texturing.vStep * texHeight;
-                var texel, r, g, b;
+
+                var texSpaceU = row.texturing.u * texture.width, texSpaceV = row.texturing.v * texture.height;
+                var wholeU = Math.floor(texSpaceU), uFrac = texSpaceU - wholeU, uStep = row.texturing.uStep * texWidth;
+                var wholeV = Math.floor(texSpaceV), vFrac = texSpaceV - wholeV, vStep = row.texturing.vStep * texHeight;
+                var texel, r, g, b, steps, updatedUV = false;
 
                 // calculate pixel color based on texture
-                texel = tex[texWidth * u + v];
+                texel = tex[texWidth * wholeU + wholeV];
                 r = (texel & 0xff);
                 g = ((texel >> 8) & 0xff);
                 b = ((texel >> 16) & 0xff);
 
                 // draw!
                 for (var loc = startLoc; loc < endLoc; loc++) {
+                    // draw current pixel
                     pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
+
+                    // update u/v
+                    updatedUV = false;
+                    uFrac += uStep; vFrac += vStep;
+                    if (uFrac > 1 || uFrac < 0) {
+                        steps = Math.floor(uFrac);
+                        wholeU = (wholeU + steps + texWidth) % texWidth;
+                        uFrac -= steps;
+                        updatedUV = true;
+                    }
+                    if (vFrac > 1 || vFrac < 0) {
+                        steps = Math.floor(vFrac);
+                        wholeV = (wholeV + steps + texHeight) % texHeight;
+                        vFrac -= steps;
+                        updatedUV = true;
+                    }
+
+                    // calculate new texel if needed
+                    if (updatedUV) {
+                        texel = tex[texWidth * wholeU + wholeV];
+                        r = (texel & 0xff);
+                        g = ((texel >> 8) & 0xff);
+                        b = ((texel >> 16) & 0xff);
+                    }
                 }
             });
         });
