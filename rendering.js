@@ -435,7 +435,7 @@ SpanCollector.prototype = {
             // get texturing info
             var unprojected = self.projection.unprojectPoint(pointOfView, x, y, elevation);
             var distancePerPixel = self.projection.width / self.projection.screenWidth;
-            var scalingFactor = distancePerPixel * self.projection.distance / unprojected.playerSpaceZ;
+            var scalingFactor = distancePerPixel * unprojected.playerSpaceZ / self.projection.distance;
             var textureDir = pointOfView.coordinateSpace.x;
 
             var texturing = {
