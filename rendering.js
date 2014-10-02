@@ -442,11 +442,16 @@ SpanCollector.prototype = {
                 u: unprojected.mapX % 1, v: unprojected.mapY % 1,
                 uStep: textureDir.x * scalingFactor, vStep: textureDir.y * scalingFactor
             };
+
+            // light this thing
+            var lighting = Math.min(1.0, 8.0 / unprojected.playerSpaceZ / unprojected.playerSpaceZ);
+
             // return
             return {
                 startX: x, endX: null, // start at 'x', ends who knows where (yet)
                 y: y,
-                texturing: texturing
+                texturing: texturing,
+                lighting: lighting
             };
         }
 
@@ -475,11 +480,13 @@ LevelRenderer.prototype = {
                 var wholeV = Math.floor(texSpaceV), vFrac = texSpaceV - wholeV, vStep = row.texturing.vStep * texHeight;
                 var texel, r, g, b, steps, updatedUV = false;
 
+                var lighting = row.lighting;
+
                 // calculate pixel color based on texture
                 texel = tex[texWidth * wholeU + wholeV];
-                r = (texel & 0xff);
-                g = ((texel >> 8) & 0xff);
-                b = ((texel >> 16) & 0xff);
+                r = (texel & 0xff) * lighting;
+                g = ((texel >> 8) & 0xff) * lighting;
+                b = ((texel >> 16) & 0xff) * lighting;
 
                 // draw!
                 for (var loc = startLoc; loc < endLoc; loc++) {
@@ -505,9 +512,9 @@ LevelRenderer.prototype = {
                     // calculate new texel if needed
                     if (updatedUV) {
                         texel = tex[texWidth * wholeU + wholeV];
-                        r = (texel & 0xff);
-                        g = ((texel >> 8) & 0xff);
-                        b = ((texel >> 16) & 0xff);
+                        r = (texel & 0xff) * lighting;
+                        g = ((texel >> 8) & 0xff) * lighting;
+                        b = ((texel >> 16) & 0xff) * lighting;
                     }
                 }
             });
