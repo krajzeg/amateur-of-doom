@@ -74,7 +74,6 @@ WallRaycaster.prototype = {
     projectWalls: function(pointOfView, levelMap) {
         // how are we projecting this thing?
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
-        var screenCenterY = Math.ceil(screenHeight / 2);
         var projection = this.projection;
 
         // how are we lighting it?
@@ -348,12 +347,12 @@ SpanCollector.prototype = {
                 if (candidate.elevation != span.elevation)
                     continue;
                 // it's the same elevation, but what if it does not connect to the span?
-                if (candidate.topY >= activeStrip.bottomY || candidate.bottomY < activeStrip.topY)
+                if ((candidate.topY >= activeStrip.bottomY) || (candidate.bottomY < activeStrip.topY))
                     continue;
                 // check if all the rows this strip has can still be extended
-                if (candidate.bottomY >= activeStrip.bottomY && candidate.bottomY < span.bottomY)
+                if ((candidate.bottomY > activeStrip.bottomY) && (candidate.bottomY < span.bottomY))
                     continue;
-                if (candidate.topY < activeStrip.topY && candidate.topY >= span.topY)
+                if ((candidate.topY < activeStrip.topY) && (candidate.topY >= span.topY))
                     continue;
 
                 // by this point, the strip has passed the gauntlet and will be used
@@ -407,7 +406,13 @@ SpanCollector.prototype = {
     },
 
     startNewRow: function(x, y) {
-        return {startX: x, endX: null, y: y};
+        return {
+            startX: x, endX: null, // start at 'x', ends who knows where (yet)
+            y: y,
+
+            // fake texturing for now
+            texturing: {u: x % 64, v: y % 64, uStep: 1 / 64, vStep: 0}
+        };
     }
 };
 
@@ -419,19 +424,25 @@ function LevelRenderer(buffer) {
 LevelRenderer.prototype = {
     renderSpans: function(spans) {
         var buffer = this.buffer, pixels = buffer.data;
-        var r, g, b, startLoc, endLoc;
 
         spans.map(function drawSpan(span) {
+            var texture = g_resourceManager.texture(span.kind);
+            var texWidth = texture.width, texHeight = texture.height, tex = texture.pixels;
 
-            switch(span.kind) {
-                case S_FLOOR:    r = g = b = 100; break;
-                case S_CEILING:  r = g = b = 50; break;
-            }
+            span.rows.map(function drawRow(row) {
+                var startLoc = buffer.index(row.startX, row.y),
+                    endLoc = buffer.index(row.endX, row.y);
+                var u = Math.floor(row.texturing.u), uFrac = row.texturing.u - u, uStep = row.texturing.uStep * texWidth;
+                var v = Math.floor(row.texturing.v), vFrac = row.texturing.v - v, vStep = row.texturing.vStep * texHeight;
+                var texel, r, g, b;
 
-            // draw all the rows
-            span.rows.map(function(row) {
-                startLoc = buffer.index(row.startX, row.y);
-                endLoc = buffer.index(row.endX, row.y);
+                // calculate pixel color based on texture
+                texel = tex[texWidth * u + v];
+                r = (texel & 0xff);
+                g = ((texel >> 8) & 0xff);
+                b = ((texel >> 16) & 0xff);
+
+                // draw!
                 for (var loc = startLoc; loc < endLoc; loc++) {
                     pixels[loc++] = r; pixels[loc++] = g; pixels[loc++] = b;
                 }
