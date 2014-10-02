@@ -60,5 +60,11 @@ World.prototype = {
             this.player.x += dir.x * moveSpeed;
             this.player.y += dir.y * moveSpeed;
         }
+
+        var angle = deg2rad(this.player.bearing);
+        this.player.coordinateSpace = {
+            z: {x: Math.sin(angle), y: -Math.cos(angle)},
+            x: {x: -Math.cos(angle), y: -Math.sin(angle)}
+        }
     }
 };

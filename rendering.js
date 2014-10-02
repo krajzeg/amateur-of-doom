@@ -27,6 +27,30 @@ function Projection(buffer, fovInDegrees, projectionPlaneWidth) {
     }
     this.columns = projectionColumns;
 }
+Projection.prototype = {
+    /**
+     * Calculates the map coordinates (x,y) corresponding to a point
+     * on the screen. Needed for texture calculations.
+     */
+    unprojectPoint: function(pointOfView, screenX, screenY, elevation) {
+        // first, transform to projection plane
+        var projectedX = ((screenX + 0.5) / this.screenWidth - 0.5) * this.width;
+        var projectedY = ((screenY + 0.5) / this.screenHeight - 0.5) * this.height;
+
+        // then, calculate X and Z in player space (from his point of view)
+        var elevationDifference = Math.abs(pointOfView.elevation - elevation);
+        var psZ = this.distance * elevationDifference / Math.abs(projectedY);
+        var psX = projectedX * psZ / this.distance;
+
+        // rotate into map space
+        var unitZ = pointOfView.coordinateSpace.z, unitX = pointOfView.coordinateSpace.x;
+        var mapX = pointOfView.x + unitZ.x * psZ + unitX.x * psX;
+        var mapY = pointOfView.y + unitZ.y * psZ + unitX.y * psX;
+
+        // return
+        return {mapX: mapX, mapY: mapY};
+    }
+};
 
 // ===============================================================
 
