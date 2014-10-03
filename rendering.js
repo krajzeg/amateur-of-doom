@@ -139,7 +139,7 @@ WallRaycaster.prototype = {
             var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
 
             // project the wall strip
-            var distance = distanceToWall(rayOrigin, intersection.intersectedAt);
+            var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
             var z = distance * projection.columns[rx].angleCosine;
             var wall = projectWall(0.0, 1.0, z);
 
@@ -177,32 +177,35 @@ WallRaycaster.prototype = {
                 frac = {x: origin.x - grid.x, y: origin.y - grid.y};
 
             // prepare all information about the ray we're going to need
-            var ray = {x: Math.sin(angle), y: -Math.cos(angle)}; // set up so bearings work like on a compass
+            var ray = Vec.fromAngle(angle);
 
-            ray.absX = Math.abs(ray.x); ray.absY = Math.abs(ray.y);
-            ray.invAbsX = 1 / Math.abs(ray.x); ray.invAbsY = 1 / Math.abs(ray.y);
-            ray.sgnX = (ray.x > 0) ? 1 : -1; ray.sgnY = (ray.y > 0) ? 1 : -1;
-            ray.ratioXY = ray.absX / ray.absY; ray.ratioYX = ray.absY / ray.absX;
+            var abs = {x: Math.abs(ray.x), y: Math.abs(ray.y)};
+            var invAbs = Vec.cwDiv({x:1, y:1}, abs);
+            var sgn = {x: (ray.x > 0) ? 1 : -1, y: (ray.y > 0) ? 1 : -1};
+            var ratioXY = abs.x / abs.y, ratioYX = abs.y / abs.x;
 
             // we iterate until we hit something, at which point we'll return
             while(true) {
                 // determine if the next grid cell the ray will hit
                 // is going to be to the right/left or up/down
-                var xDist = (ray.x > 0) ? (1.0 - frac.x) : frac.x, yDist = (ray.y > 0) ? (1.0 - frac.y) : frac.y;
-                var xTime = xDist * ray.invAbsX, yTime = yDist * ray.invAbsY;
-                var goingHorizontally = xTime < yTime;
+                var dist = {
+                    x: (ray.x > 0) ? (1.0 - frac.x) : frac.x,
+                    y: (ray.y > 0) ? (1.0 - frac.y) : frac.y
+                };
+                var time = Vec.cwMul(dist, invAbs);
+                var goingHorizontally = time.x < time.y;
 
                 // move the ray to the next possible intersection point
                 if (goingHorizontally) {
                     // go to the next horizontal grid (right or left depending on ray.x)
-                    grid.x += ray.sgnX;
+                    grid.x += sgn.x;
                     frac.x = (ray.x < 0) ? 1 : 0;
-                    frac.y += ray.sgnY * xDist * ray.ratioYX;
+                    frac.y += sgn.y * dist.x * ratioYX;
                 } else {
                     // go to the next vertical grid (up or down depending on ray.y)
-                    grid.y += ray.sgnY;
+                    grid.y += sgn.y;
                     frac.y = (ray.y < 0) ? 1 : 0;
-                    frac.x += ray.sgnX * yDist * ray.ratioXY;
+                    frac.x += sgn.x * dist.y * ratioXY;
                 }
 
                 // texturing coordinate
@@ -210,20 +213,20 @@ WallRaycaster.prototype = {
                 if (goingHorizontally) {
                     u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
                 } else {
-                    u = (ray.y > 0) ? frac.x : (1.0 - frac.x);
+                    u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
                 }
 
                 // we're in the next grid, did we hit?
                 var cell = cells[grid.y * lW + grid.x];
                 if (cell.floor < 1) {
                     // yup! that's a wall!
-                    var intersectionPoint = {x: grid.x + frac.x, y: grid.y + frac.y};
+                    var intersectionPoint = Vec.add(grid, frac);
                     return {
-                        ray: {x: ray.x, y: ray.y},
+                        ray: ray,
                         intersectedAt: intersectionPoint,
-                        wallNormal: {x: goingHorizontally ? ray.sgnX : 0, y: goingHorizontally ? 0 : ray.sgnY},
+                        wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
                         withCell: cell,
-                        textureU: goingHorizontally ? frac.y : frac.x
+                        textureU: u
                     };
                 }
             }

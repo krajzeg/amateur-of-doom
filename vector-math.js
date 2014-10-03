@@ -69,6 +69,37 @@ Vec = {
      */
     cwDiv: function(v1, v2) {
         return {x: v1.x / v2.x, y: v1.y / v2.y};
-    }
+    },
 
+    /**
+     * Takes an angle and returns the unit vector
+     * corresponding to it.
+     */
+    fromAngle: function(angle) {
+        return {x: Math.sin(angle), y: -Math.cos(angle)};
+    },
+
+    /**
+     * Takes a bearing (0 = north, 360 degrees) and returns
+     * the unit vector corresponding to it.
+     */
+    fromBearing: function(bearing) {
+        var angle = deg2rad(bearing);
+        return Vec.fromAngle(angle);
+    },
+
+    /**
+     * Returns a vector rotated 90 degrees clockwise.
+     */
+    rotate90Clockwise: function(v) {
+        //noinspection JSSuspiciousNameCombination
+        return {x: -v.y, y: v.x};
+    },
+
+    /**
+     * Returns the distance between two points represented as vectors.
+     */
+    distance: function(v1, v2) {
+        return Vec.len(Vec.sub(v1, v2));
+    }
 };

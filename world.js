@@ -62,10 +62,9 @@ World.prototype = {
             this.player.y += dir.y * moveSpeed;
         }
 
-        var angle = deg2rad(this.player.bearing);
-        this.player.coordinateSpace = {
-            z: {x: Math.sin(angle), y: -Math.cos(angle)},
-            x: {x: Math.cos(angle), y: Math.sin(angle)}
-        }
+        var playerZ = Vec.fromBearing(this.player.bearing);
+        var playerX = Vec.rotate90Clockwise(playerZ);
+
+        this.player.coordinateSpace = {z: playerZ, x: playerX};
     }
 };
