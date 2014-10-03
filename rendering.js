@@ -34,21 +34,23 @@ Projection.prototype = {
      */
     unprojectPoint: function(pointOfView, screenX, screenY, elevation) {
         // first, transform to projection plane
-        var projectedX = ((screenX + 0.5) / this.screenWidth - 0.5) * this.width;
-        var projectedY = ((screenY + 0.5) / this.screenHeight - 0.5) * this.height;
+        var projected=  {
+            x: ((screenX + 0.5) / this.screenWidth - 0.5) * this.width,
+            y: ((screenY + 0.5) / this.screenHeight - 0.5) * this.height
+        };
 
         // then, calculate X and Z in player space (from his point of view)
         var elevationDifference = Math.abs(pointOfView.elevation - elevation);
-        var psZ = this.distance * elevationDifference / Math.abs(projectedY);
-        var psX = projectedX * psZ / this.distance;
+        var psZ = this.distance * elevationDifference / Math.abs(projected.y);
+        var psX = projected.x * psZ / this.distance;
 
         // rotate into map space
         var unitZ = pointOfView.coordinateSpace.z, unitX = pointOfView.coordinateSpace.x;
-        var mapX = pointOfView.x + unitZ.x * psZ + unitX.x * psX;
-        var mapY = pointOfView.y + unitZ.y * psZ + unitX.y * psX;
+        var mapped = Vec.add(Vec.mul(unitZ, psZ), Vec.mul(unitX, psX));
+        Vec.addInPlace(mapped, pointOfView);
 
         // return
-        return {mapX: mapX, mapY: mapY, playerSpaceX: psX, playerSpaceZ: psZ};
+        return {mapped: mapped, playerSpaceX: psX, playerSpaceZ: psZ};
     }
 };
 
@@ -460,7 +462,7 @@ SpanCollector.prototype = {
             var textureDir = pointOfView.coordinateSpace.x;
 
             var texturing = {
-                u: unprojected.mapX % 1, v: unprojected.mapY % 1,
+                u: unprojected.mapped.x % 1, v: unprojected.mapped.y % 1,
                 uStep: textureDir.x * scalingFactor, vStep: textureDir.y * scalingFactor
             };
 

@@ -36,6 +36,14 @@ Vec = {
     },
 
     /**
+     * Adds a vector to another in place (like +=).
+     */
+    addInPlace: function(v, a) {
+        v.x += a.x; v.y += a.y;
+        return v;
+    },
+
+    /**
      * Subtracts two vectors.
      */
     sub: function(v1, v2) {
@@ -47,6 +55,20 @@ Vec = {
      */
     mul: function(v1, n) {
         return {x: v1.x * n, y: v1.y * n};
+    },
+
+    /**
+     * Component-wise multiplication of two vectors.
+     */
+    cwMul: function(v1, v2) {
+        return {x: v1.x * v2.x, y: v1.y * v2.y};
+    },
+
+    /**
+     * Component-wise division of two vectors.
+     */
+    cwDiv: function(v1, v2) {
+        return {x: v1.x / v2.x, y: v1.y / v2.y};
     }
 
 };
