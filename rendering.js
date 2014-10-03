@@ -91,17 +91,32 @@ Buffer.prototype = {
 
 // ===============================================================
 
+function Lighting(lightPower, ambient, diffuse) {
+    this.lightPower = lightPower;
+    this.ambient = ambient;
+    this.diffuse = diffuse;
+}
+Lighting.prototype = {
+    lightingFactor: function(surfaceNormal, surfaceDistance, lightVector) {
+        var lighting = this.lightPower / (surfaceDistance * surfaceDistance); // attenuation with distance
+        lighting = Math.min(1.0, lighting);
+        lighting *= this.ambient + this.diffuse * Math.abs(Vec.dot(surfaceNormal, lightVector));
+
+        return lighting;
+    }
+};
+
+// ===============================================================
+
 function WallRaycaster(projection) {
     this.projection = projection;
+    this.lighting = new Lighting(8.0, 0.3, 0.7);
 }
 WallRaycaster.prototype = {
     projectWalls: function(pointOfView, levelMap) {
         // how are we projecting this thing?
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var projection = this.projection;
-
-        // how are we lighting it?
-        var lightPower = 8.0, diffuse = 0.4, ambient = 0.6;
 
         // where are we rendering from?
         var rayOrigin = {x: pointOfView.x, y: pointOfView.y};
@@ -127,10 +142,7 @@ WallRaycaster.prototype = {
             var wall = projectWall(0.0, 1.0, z);
 
             // light the wall (simplified Phong lighting with no specularity)
-            var lighting = lightPower / distance / distance; // attenuation with distance
-            lighting = Math.min(1.0, lighting);
-            lighting *= ambient + diffuse * Math.abs(intersection.ray.x * intersection.wallNormal.x + intersection.ray.y * intersection.wallNormal.y); // simplified Phong
-            wall.lighting = lighting;
+            wall.lighting = this.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
 
             // complete the wall information
             wall.kind = S_WALL;
@@ -298,6 +310,7 @@ WallRaycaster.prototype = {
  */
 function SpanCollector(projection) {
     this.projection = projection;
+    this.lighting = new Lighting(7.0, 0.3, 0.7);
 }
 SpanCollector.prototype = {
     /**
@@ -452,15 +465,7 @@ SpanCollector.prototype = {
             };
 
             // light this thing
-            var ambient = 0.5, diffuse = 0.5;
-            var distance = unprojected.playerSpaceZ;
-            var lighting = 8.0 / distance / distance; // attenuation with distance
-            lighting = Math.min(1.0, lighting);
-
-            // take reflection angle into account
-            var ray = {x: pointOfView.z, y: pointOfView.elevation - elevation};
-            var reflectionCoefficient = Math.abs(ray.y);
-            lighting *= ambient + diffuse * reflectionCoefficient;
+            var lighting = self.lighting.lightingFactor({x: 0, y: 1}, unprojected.playerSpaceZ, {x: unprojected.playerSpaceZ, y: pointOfView.elevation - elevation});
 
             // return
             return {
