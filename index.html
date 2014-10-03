@@ -3,17 +3,30 @@
         <script src="lib/underscore/underscore-min.js"></script>
         <script src="lib/q/q.js"></script>
 
-        <script src="vector-math.js"></script>
-        <script src="utilities.js"></script>
-        <script src="resources.js"></script>
-        <script src="world.js"></script>
-        <script src="rendering.js"></script>
-		<script src="main.js"></script>
+        <script src="js/vector-math.js"></script>
+        <script src="js/utilities.js"></script>
+        <script src="js/resources.js"></script>
+        <script src="js/world.js"></script>
+        <script src="js/rendering.js"></script>
+		<script src="js/main.js"></script>
 		<script>
 			window.onload = startDemo;
 		</script>
+
+        <title>Amateur of Doom</title>
+
+        <link rel="stylesheet" type="text/css" href="css/style.css">
 	</head>
 	<body>
-		<canvas id="screen" width="640" height="480"></canvas>
+        <!-- GitHub ribbon -->
+        <a href="https://github.com/krajzeg/amateur-of-doom"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
+
+        <!-- Screen -->
+        <div class="holder">
+		    <canvas id="screen" width="640" height="480"></canvas>
+            <div class="info">
+                Use <b>WASD</b> to walk around.
+            </div>
+        </div>
 	</body>
 </html>
