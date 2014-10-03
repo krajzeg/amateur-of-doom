@@ -232,11 +232,6 @@ WallRaycaster.prototype = {
             }
         }
 
-        function distanceToWall(rayOrigin, rayIntersection) {
-            var distanceVec = {x: rayIntersection.x - rayOrigin.x, y: rayIntersection.y - rayOrigin.y}; // this is straight-line distance
-            return Math.sqrt(distanceVec.x * distanceVec.x + distanceVec.y * distanceVec.y);
-        }
-
         function projectWall(top, bottom, zDistance) {
             // scale according to Z distance
             var scalingFactor = projection.distance / zDistance;
@@ -386,7 +381,7 @@ SpanCollector.prototype = {
             var columnX = startingX + 1;
             var activeStrip = strip;
 
-            // this loop will be broken out of by returing the finished span
+            // this loop will be broken out of by returning the finished span
             while (true) {
                 var column = columns[columnX];
 
