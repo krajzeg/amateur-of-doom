@@ -19,11 +19,15 @@ Input.prototype = {
         window.onkeyup   = handler.bind(null, false);
 
         function handler(state, evt) {
-            var char = String.fromCharCode(evt.which);
-            var mapping = INPUT_MAPPINGS[char];
+            if (self.locked) {
+                var char = String.fromCharCode(evt.which);
+                var mapping = INPUT_MAPPINGS[char];
 
-            if (mapping)
-                self[mapping] = state;
+                if (mapping) {
+                    self[mapping] = state;
+                    return false;
+                }
+            }
         }
 
         // mouse controls
