@@ -45,10 +45,10 @@ Level.prototype = {
 
 // ====================================================================
 
-var PLAYER_RADIUS = 0.2;
+var PLAYER_RADIUS = 0.3, PLAYER_MOVEMENT_SPEED = 0.1;
+
 function Player(world, properties) {
     this.world = world;
-    this.keyState = {};
     _.extend(this, properties);
 }
 Player.prototype = {
@@ -85,33 +85,26 @@ Player.prototype = {
         }
     },
 
-    bindEvents: function() {
-        var self = this;
-        window.onkeydown = handler.bind(null, true);
-        window.onkeyup   = handler.bind(null, false);
-
-        function handler(state, evt) {
-            self.keyState[String.fromCharCode(evt.which)] = state;
-        }
-    },
-
     handleInput: function() {
-        if (this.keyState['A']) this.bearing -= 3.0;
-        if (this.keyState['D']) this.bearing += 3.0;
-        if (this.keyState['W']) this.move(0, 0.2);
-        if (this.keyState['S']) this.move(0, -0.2);
+        if (g_input.left) this.move(-PLAYER_MOVEMENT_SPEED, 0);
+        if (g_input.right) this.move(PLAYER_MOVEMENT_SPEED, 0);
+        if (g_input.forward) this.move(0, PLAYER_MOVEMENT_SPEED);
+        if (g_input.back) this.move(0, -PLAYER_MOVEMENT_SPEED);
+
+        this.bearing += g_input.rotation.x;
     },
 
     update: function() {
+        // respond to input
         this.handleInput();
 
-        // elevation
+        // update elevation
         var gridPosition = Vec.integer(this);
         var floorHeight = this.world.level.cell(gridPosition.x, gridPosition.y).floor;
         this.floor = floorHeight;
         this.elevation = floorHeight - 0.5;
 
-        // coordinate space
+        // update coordinate space
         var playerZ = Vec.fromBearing(this.bearing);
         var playerX = Vec.rotate90Clockwise(playerZ);
         this.coordinateSpace = {z: playerZ, x: playerX};
