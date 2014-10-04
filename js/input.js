@@ -32,9 +32,11 @@ Input.prototype = {
         });
         document.addEventListener('pointerlockchange', function(evt) {
             self.locked = document.pointerLockElement == mouseElement;
+            if (self.locked)
+                self.gracePeriod = 1;
         });
         document.addEventListener('mousemove', function(evt) {
-            if (self.locked)
+            if (self.locked && (!self.gracePeriod))
                 self.rotation = {x: evt.movementX, y: evt.movementY};
         });
     },
@@ -44,5 +46,7 @@ Input.prototype = {
      */
     reset: function() {
         this.rotation = {x: 0, y: 0};
+        if (this.gracePeriod)
+            this.gracePeriod--;
     }
 };
