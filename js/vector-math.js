@@ -101,5 +101,24 @@ Vec = {
      */
     distance: function(v1, v2) {
         return Vec.len(Vec.sub(v1, v2));
+    },
+
+    /**
+     * Rounds each component of the vector towards -Infinity.
+     */
+    integer: function(v) {
+        return {x: Math.floor(v.x), y: Math.floor(v.y)};
+    },
+
+    /**
+     * Returns a vector with just the fractional parts of each component (relative to
+     * Vec.integer, always positive).
+     * @param v
+     */
+    frac: function(v) {
+        var fracX = v.x % 1, fracY = v.y % 1;
+        if (fracX < 0) fracX = 1.0 - fracX;
+        if (fracY < 0) fracY = 1.0 - fracY;
+        return {x: fracX, y: fracY};
     }
 };

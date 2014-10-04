@@ -176,6 +176,10 @@ WallRaycaster.prototype = {
             var grid = {x: Math.floor(origin.x), y: Math.floor(origin.y)},
                 frac = {x: origin.x - grid.x, y: origin.y - grid.y};
 
+            // get the base floor/ceiling levels
+            var floorBase = cells[lW * grid.y + grid.x].floor;
+            var ceilingBase = cells[lW * grid.y + grid.x].ceiling;
+
             // prepare all information about the ray we're going to need
             var ray = Vec.fromAngle(angle);
 
@@ -208,19 +212,21 @@ WallRaycaster.prototype = {
                     frac.x += sgn.x * dist.y * ratioXY;
                 }
 
-                // texturing coordinate
-                var u;
-                if (goingHorizontally) {
-                    u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
-                } else {
-                    u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
-                }
-
                 // we're in the next grid, did we hit?
                 var cell = cells[grid.y * lW + grid.x];
-                if (cell.floor < 1) {
+                if (cell.floor < floorBase || cell.ceiling > ceilingBase) {
                     // yup! that's a wall!
                     var intersectionPoint = Vec.add(grid, frac);
+
+                    // texturing coordinate
+                    var u;
+                    if (goingHorizontally) {
+                        u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
+                    } else {
+                        u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
+                    }
+
+                    // return all intersection information
                     return {
                         ray: ray,
                         intersectedAt: intersectionPoint,

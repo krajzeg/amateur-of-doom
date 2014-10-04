@@ -62,9 +62,14 @@ World.prototype = {
             this.player.y += dir.y * moveSpeed;
         }
 
+        // elevation
+        var gridPosition = Vec.integer(this.player);
+        var floorHeight = this.level.cells[gridPosition.y * this.level.width + gridPosition.x].floor;
+        this.player.elevation = floorHeight - 0.5;
+
+        // coordinate space
         var playerZ = Vec.fromBearing(this.player.bearing);
         var playerX = Vec.rotate90Clockwise(playerZ);
-
         this.player.coordinateSpace = {z: playerZ, x: playerX};
     }
 };
