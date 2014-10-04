@@ -126,7 +126,8 @@ WallRaycaster.prototype = {
         var eyeElevation = pointOfView.elevation;
 
         // what are the floor/ceiling elevations we should start with?
-        var baseFloor = 1, baseCeiling = 0;
+        var originCell = levelMap.cellAtVector(rayOrigin);
+        var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
 
         // OK, Mr. Raycaster, go through all the columns on the screen
         var columns = new Array(screenWidth), column;
