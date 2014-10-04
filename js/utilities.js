@@ -7,19 +7,12 @@ function deg2rad(degrees) {
     return degrees / 180.0 * Math.PI;
 }
 
-
-// vector arithmetic
-
-function vectorLengthSq(vector) {
-    return vector.x * vector.x + vector.y * vector.y;
-}
-
-function vectorLength(vector) {
-    return Math.sqrt(vector.x * vector.x + vector.y * vector.y);
-}
-
-function normalize(vector) {
-    var length = vectorLength(vector);
-    vector.x /= length;
-    vector.y /= length;
+/**
+ * Returns the fractional part of the number. For negative
+ * numbers, the result will be positive too: frac(-2.7) = 0.3 (-2.7 - (-3)).
+ * We always count from the lower integer.
+ */
+function frac(number) {
+    var f = number % 1;
+    return (f < 0.0) ? f + 1 : f;
 }

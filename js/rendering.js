@@ -141,7 +141,7 @@ WallRaycaster.prototype = {
             // project the wall strip
             var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
             var z = distance * projection.columns[rx].angleCosine;
-            var wall = projectWall(0.0, 1.0, z);
+            var wall = projectWall(intersection.top, intersection.bottom, z);
 
             // light the wall (simplified Phong lighting with no specularity)
             wall.lighting = this.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
@@ -230,6 +230,7 @@ WallRaycaster.prototype = {
                     return {
                         ray: ray,
                         intersectedAt: intersectionPoint,
+                        bottom: floorBase, top: cell.floor,
                         wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
                         withCell: cell,
                         textureU: u
@@ -564,8 +565,6 @@ LevelRenderer.prototype = {
         });
 
         function drawTexturedStrip(stripX, strip) {
-            // TODO: add support for wrapping textures
-
             var texturingInfo = strip.texturing;
             var texture = texturingInfo.texture;
             var lighting = strip.lighting;
@@ -573,15 +572,17 @@ LevelRenderer.prototype = {
             var tex = texture.pixels, buf = buffer.data;
 
             // calculate starting UV coordinates for texturing
-            var texU = Math.floor(texture.height * texturingInfo.u);
-            var texV = Math.floor(texture.width * texturingInfo.topV);
-            var texLoc = texU * texture.width + texV;
+            var texWidth = texture.width, texHeight = texture.height;
+            var scaledU = texHeight * frac(texturingInfo.u), scaledV = texWidth * frac(texturingInfo.topV);
+            var texU = Math.floor(scaledU), texV = Math.floor(scaledV);
+            var texLoc = texU * texWidth + texV;
+            var wrapLoc = (texU+1) * texWidth;
 
             // calculate how fast we should step through the texture (V per screen pixel)
             var texVStep = texture.width * (texturingInfo.bottomV - texturingInfo.topV) / (strip.bottomY - strip.topY);
 
             // start the counter we will be using to step through texture pixels (counts fractional texels)
-            var texFracV = texture.width * texturingInfo.topV - texV;
+            var texFracV = scaledV - texV;
 
             // extract first texel
             var r, g, b;
@@ -610,6 +611,10 @@ LevelRenderer.prototype = {
                         // one pixel at a time is easy and fast
                         texLoc++;
                         texFracV--;
+                    }
+
+                    while(texLoc >= wrapLoc) {
+                        texLoc -= texWidth;
                     }
 
                     // calculate new color to draw with based on the new texel
