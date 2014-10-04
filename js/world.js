@@ -13,29 +13,75 @@ var levelData =
 
 // ====================================================================
 
-function World(levelData, levelWidth, levelHeight) {
-    this.player = {x: 4, y: 4, elevation: 0.5, bearing: 29};
-    this.level = this.parseLevel(levelData, levelWidth, levelHeight);
-    this.keyState = {};
-    this.update();
-}
-World.prototype = {
-    parseLevel: function(levelData, levelWidth, levelHeight) {
-        var cells = new Array(levelData.length);
+function Level(levelData, levelWidth, levelHeight) {
+    var cells = new Array(levelData.length);
 
-        var tWall = g_resourceManager.texture('wall');
+    var tWall = g_resourceManager.texture('wall');
 
-        for (var i = 0; i < levelData.length; i++) {
-            switch(levelData.charAt(i)) {
-                case ' ': cells[i] = {floor: 1, ceiling: -0.5}; break;
-                case '#': cells[i] = {floor: -0.5, ceiling: -0.5, wallTexture: tWall}; break;
-            }
+    for (var i = 0; i < levelData.length; i++) {
+        switch(levelData.charAt(i)) {
+            case ' ': cells[i] = {floor: 1, ceiling: -0.5}; break;
+            case '#': cells[i] = {floor: -0.5, ceiling: -0.5, wallTexture: tWall}; break;
         }
+    }
 
-        return {
-            width: levelWidth,
-            height: levelHeight,
-            cells: cells
+    // store for later
+    _.extend(this, {
+        width: levelWidth,
+        height: levelHeight,
+        cells: cells
+    });
+}
+Level.prototype = {
+    cell: function(x, y) {
+        return this.cells[y * this.width + x];
+    },
+
+    cellAtVector: function(v) {
+        v = Vec.integer(v);
+        return this.cells[v.y * this.width + v.x];
+    }
+};
+
+// ====================================================================
+
+var PLAYER_RADIUS = 0.2;
+function Player(world, properties) {
+    this.world = world;
+    this.keyState = {};
+    _.extend(this, properties);
+}
+Player.prototype = {
+    move: function(x, z) {
+        var self = this;
+
+        // move in the right direction
+        var delta = Vec.add(Vec.mul(this.coordinateSpace.z, z), Vec.mul(this.coordinateSpace.x, x));
+        var newPos = Vec.add(this, delta);
+
+        // kick the player out of any walls
+        var level = this.world.level;
+
+        var right = Vec.add(newPos, {x: PLAYER_RADIUS, y: 0});
+        if (isInAWall(right))
+            newPos.x = Math.floor(right.x) - PLAYER_RADIUS;
+
+        var left = Vec.add(newPos, {x: -PLAYER_RADIUS, y: 0});
+        if (isInAWall(left))
+            newPos.x = Math.ceil(left.x) + PLAYER_RADIUS;
+
+        var up = Vec.add(newPos, {x: 0, y: -PLAYER_RADIUS});
+        if (isInAWall(up))
+            newPos.y = Math.ceil(up.y) + PLAYER_RADIUS;
+
+        var down = Vec.add(newPos, {x: 0, y: PLAYER_RADIUS});
+        if (isInAWall(down))
+            newPos.y = Math.floor(down.y) - PLAYER_RADIUS;
+
+        this.x = newPos.x; this.y = newPos.y;
+
+        function isInAWall(pos) {
+            return (self.floor > level.cellAtVector(pos).floor);
         }
     },
 
@@ -49,27 +95,38 @@ World.prototype = {
         }
     },
 
+    handleInput: function() {
+        if (this.keyState['A']) this.bearing -= 3.0;
+        if (this.keyState['D']) this.bearing += 3.0;
+        if (this.keyState['W']) this.move(0, 0.2);
+        if (this.keyState['S']) this.move(0, -0.2);
+    },
+
     update: function() {
-        if (this.keyState['A']) this.player.bearing -= 3.0;
-        if (this.keyState['D']) this.player.bearing += 3.0;
-
-        if (this.keyState['W'] || this.keyState['S']) {
-            var angle = deg2rad(this.player.bearing);
-            var dir = {x: Math.sin(angle), y: -Math.cos(angle)};
-            var moveSpeed = 0.25 * ((this.keyState['W'] ? 1 : 0) + (this.keyState['S'] ? -1 : 0));
-
-            this.player.x += dir.x * moveSpeed;
-            this.player.y += dir.y * moveSpeed;
-        }
+        this.handleInput();
 
         // elevation
-        var gridPosition = Vec.integer(this.player);
-        var floorHeight = this.level.cells[gridPosition.y * this.level.width + gridPosition.x].floor;
-        this.player.elevation = floorHeight - 0.5;
+        var gridPosition = Vec.integer(this);
+        var floorHeight = this.world.level.cell(gridPosition.x, gridPosition.y).floor;
+        this.floor = floorHeight;
+        this.elevation = floorHeight - 0.5;
 
         // coordinate space
-        var playerZ = Vec.fromBearing(this.player.bearing);
+        var playerZ = Vec.fromBearing(this.bearing);
         var playerX = Vec.rotate90Clockwise(playerZ);
-        this.player.coordinateSpace = {z: playerZ, x: playerX};
+        this.coordinateSpace = {z: playerZ, x: playerX};
+    }
+};
+
+// ====================================================================
+
+function World(levelData, levelWidth, levelHeight) {
+    this.level = new Level(levelData, levelWidth, levelHeight);
+    this.player = new Player(this, {x: 4, y: 4, elevation: 0.5, bearing: 29});
+    this.update();
+}
+World.prototype = {
+    update: function() {
+        this.player.update();
     }
 };

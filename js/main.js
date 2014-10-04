@@ -16,7 +16,7 @@ function startDemo() {
             window.g_renderer = new Renderer(buffer, projection);
 
             // listen to the user
-            g_world.bindEvents();
+            g_world.player.bindEvents();
 
             // start the show!
             window.requestAnimationFrame(mainLoop);
@@ -26,6 +26,8 @@ function startDemo() {
 
                 window.requestAnimationFrame(mainLoop);
             }
+        }).catch(function(e) {
+            console.log(e.stack || e);
         });
 
 }
