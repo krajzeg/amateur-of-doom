@@ -405,9 +405,9 @@ SpanCollector.prototype = {
                     if ((candidate.topY >= activeStrip.bottomY) || (candidate.bottomY < activeStrip.topY))
                         continue;
                     // check if all the rows this strip has can still be extended
-                    if ((candidate.bottomY > activeStrip.bottomY) && (candidate.bottomY < span.bottomY))
+                    if ((candidate.bottomY > activeStrip.bottomY) && (activeStrip.bottomY < span.bottomY))
                         continue;
-                    if ((candidate.topY < activeStrip.topY) && (candidate.topY >= span.topY))
+                    if ((candidate.topY < activeStrip.topY) && (activeStrip.topY > span.topY))
                         continue;
 
                     // by this point, the strip has passed the gauntlet and will be used
