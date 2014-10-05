@@ -582,7 +582,7 @@ LevelRenderer.prototype = {
 
                 // calculate pixel color based on texture
                 texel = tex[texWidth * wholeU + wholeV];
-                r = 255; //(texel & 0xff) * lighting;
+                r = (texel & 0xff) * lighting;
                 g = ((texel >> 8) & 0xff) * lighting;
                 b = ((texel >> 16) & 0xff) * lighting;
 
