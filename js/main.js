@@ -10,7 +10,7 @@ function startDemo() {
         .then(function() {
             // prepare everything
             window.g_input = new Input();
-            window.g_world = new World(levelData, 10, 10);
+            window.g_world = new World(floorData, ceilingData, 10, 10);
 
             var canvas = document.getElementById('screen');
             var buffer = new Buffer(canvas);

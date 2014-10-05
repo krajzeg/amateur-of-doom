@@ -128,7 +128,8 @@ WallRaycaster.prototype = {
         var eyeAngle = deg2rad(pointOfView.bearing);
         var eyeElevation = pointOfView.elevation;
 
-        var originCell = levelMap.cellAtVector(rayOrigin);
+        var originFloor = levelMap.floorAt(rayOrigin),
+            originCeiling = levelMap.ceilingAt(rayOrigin);
 
         // OK, Mr. Raycaster, go through all the columns on the screen
         var columns = new Array(screenWidth), column;
@@ -144,8 +145,7 @@ WallRaycaster.prototype = {
             var clippingTop = 0, clippingBottom = screenHeight;
 
             // current floor/ceiling elevations are going to be important for rendering
-            var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
-            var currentFloor = baseFloor, currentCeiling = baseCeiling;
+            var currentFloor = originFloor.elevation, currentCeiling = originCeiling.elevation;
 
             _.map(intersections, function(intersection) {
                 var wallKind = intersection.wallType;
@@ -200,9 +200,9 @@ WallRaycaster.prototype = {
 
             // cap the column off with a floor and ceiling, if needed
             if (column[0].topY != 0)
-                column.unshift({kind: S_CEILING, elevation: baseCeiling, topY: 0, bottomY: column[0].topY});
+                column.unshift({kind: S_CEILING, elevation: originCeiling.elevation, topY: 0, bottomY: column[0].topY});
             if (_.last(column).bottomY != screenHeight)
-                column.push({kind: S_FLOOR, elevation: baseFloor, topY: _.last(column).bottomY, bottomY: screenHeight});
+                column.push({kind: S_FLOOR, elevation: originFloor.elevation, topY: _.last(column).bottomY, bottomY: screenHeight});
 
             // store the finished column
             columns[rx] = column;
@@ -213,7 +213,7 @@ WallRaycaster.prototype = {
         // ==== raycasting substeps below
 
         function castRayAndReturnIntersections(origin, angle) {
-            var cells = levelMap.cells, lW = levelMap.width;
+            var lW = levelMap.width;
 
             // we'll keep the integral and fractional part of where the ray is separate
             // this will make the algorithm easier
@@ -221,8 +221,8 @@ WallRaycaster.prototype = {
                 frac = {x: origin.x - grid.x, y: origin.y - grid.y};
 
             // get the base floor/ceiling levels
-            var floorBase = cells[lW * grid.y + grid.x].floor;
-            var ceilingBase = cells[lW * grid.y + grid.x].ceiling;
+            var currentFloor = levelMap.floorAt(grid).elevation;
+            var currentCeiling = levelMap.ceilingAt(grid).elevation;
 
             // prepare all information about the ray we're going to need
             var ray = Vec.fromAngle(angle);
@@ -258,9 +258,11 @@ WallRaycaster.prototype = {
                 }
 
                 // we're in the next grid, did we hit a wall?
-                var cell = cells[grid.y * lW + grid.x];
-                if (cell.floor != floorBase) {
-                    // yup! we have to raise the floor
+                var floor = levelMap.floorAt(grid),
+                    ceiling = levelMap.ceilingAt(grid);
+
+                if (floor.elevation != currentFloor) {
+                    // yup! we have to raise/lower the floor
                     var intersectionPoint = Vec.add(grid, frac);
 
                     // texturing coordinate calculation
@@ -275,18 +277,18 @@ WallRaycaster.prototype = {
                     intersections.push({
                         ray: ray,
                         intersectedAt: intersectionPoint,
-                        bottom: floorBase, top: cell.floor,
+                        bottom: currentFloor, top: floor.elevation,
                         wallType: WT_FLOOR,
                         wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
-                        withCell: cell,
+                        withCell: floor,
                         textureU: u
                     });
 
                     // raise the floor for future cells
-                    floorBase = cell.floor;
+                    currentFloor = floor.elevation;
                 }
 
-                if (floorBase == ceilingBase) {
+                if (currentFloor == currentCeiling) {
                     // we've reached the final wall, let's return
                     return intersections;
                 }

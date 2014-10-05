@@ -1,5 +1,5 @@
 // Hardcoded level data
-var levelData =
+var floorData =
     "##########" +
     "#   #    #" +
     "#        #" +
@@ -11,38 +11,70 @@ var levelData =
     "#  #     #" +
     "##########";
 
+var ceilingData =
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          " +
+    "          ";
+
 // ====================================================================
 
-function Level(levelData, levelWidth, levelHeight) {
-    var cells = new Array(levelData.length);
+function Level(floorData, ceilingData, levelWidth, levelHeight) {
+    var len = floorData.length;
+    var floors = new Array(len);
+    var ceilings = new Array(len);
 
     var tWall = g_resourceManager.texture('wall'),
-        tFloor = g_resourceManager.texture('floor');
+        tFloor = g_resourceManager.texture('floor'),
+        tCeiling = g_resourceManager.texture('ceiling');
 
-    for (var i = 0; i < levelData.length; i++) {
-        switch(levelData.charAt(i)) {
-            case ' ': cells[i] = {floor: 1, ceiling: -0.5, wallTexture: tFloor}; break;
-            case '.': cells[i] = {floor: 0.875, ceiling: -0.5, wallTexture: tFloor}; break;
-            case 'v': cells[i] = {floor: 1.125, ceiling: -0.5, wallTexture: tFloor}; break;
-            case '#': cells[i] = {floor: -0.5, ceiling: -0.5, wallTexture: tWall}; break;
+    for (var i = 0; i < len; i++) {
+        var ceiling, floor;
+        switch(ceilingData.charAt(i)) {
+            case ' ': ceiling = {elevation: -0.5, wallTexture: tCeiling, flatTexture: tCeiling}; break;
         }
+        ceilings[i] = ceiling;
+
+        switch(floorData.charAt(i)) {
+            case ' ': floor = {elevation: 1, wallTexture: tFloor, flatTexture: tFloor}; break;
+            case '.': floor = {elevation: 0.875, wallTexture: tFloor, flatTexture: tFloor}; break;
+            case 'v': floor = {elevation: 1.125, wallTexture: tFloor, flatTexture: tCeiling}; break;
+            case '#': floor = {elevation: ceiling.elevation, wallTexture: tWall, flatTexture: tFloor}; break;
+        }
+        floors[i] = floor;
     }
 
     // store for later
     _.extend(this, {
         width: levelWidth,
         height: levelHeight,
-        cells: cells
+        floors: floors,
+        ceilings: ceilings
     });
 }
 Level.prototype = {
-    cell: function(x, y) {
-        return this.cells[y * this.width + x];
+    floor: function(x, y) {
+        return this.floors[y * this.width + x];
     },
 
-    cellAtVector: function(v) {
+    ceiling: function(x, y) {
+        return this.ceilings[y * this.width + x];
+    },
+
+    floorAt: function(v) {
         v = Vec.integer(v);
-        return this.cells[v.y * this.width + v.x];
+        return this.floors[v.y * this.width + v.x];
+    },
+
+    ceilingAt: function(v) {
+        v = Vec.integer(v);
+        return this.ceilings[v.y * this.width + v.x];
     }
 };
 
@@ -86,7 +118,7 @@ Player.prototype = {
         this.x = newPos.x; this.y = newPos.y;
 
         function isInAWall(pos) {
-            return (self.floor - level.cellAtVector(pos).floor > PLAYER_SCALING_HEIGHT);
+            return (self.floor - level.floorAt(pos).elevation > PLAYER_SCALING_HEIGHT);
         }
     },
 
@@ -104,8 +136,7 @@ Player.prototype = {
         this.handleInput();
 
         // update elevation
-        var gridPosition = Vec.integer(this);
-        var floorHeight = this.world.level.cell(gridPosition.x, gridPosition.y).floor;
+        var floorHeight = this.world.level.floorAt(this).elevation;
         this.floor = floorHeight;
         this.elevation = floorHeight - 0.5;
 
@@ -118,8 +149,8 @@ Player.prototype = {
 
 // ====================================================================
 
-function World(levelData, levelWidth, levelHeight) {
-    this.level = new Level(levelData, levelWidth, levelHeight);
+function World(floorData, ceilingData, levelWidth, levelHeight) {
+    this.level = new Level(floorData, ceilingData, levelWidth, levelHeight);
     this.player = new Player(this, {x: 4, y: 4, elevation: 0.5, bearing: 29});
     this.update();
 }
