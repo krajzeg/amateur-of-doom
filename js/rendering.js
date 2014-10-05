@@ -121,6 +121,7 @@ WallRaycaster.prototype = {
         var self = this;
         // how are we projecting this thing?
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
+        var screenCenterY = screenHeight / 2;
         var projection = this.projection;
 
         // where are we rendering from?
@@ -147,7 +148,7 @@ WallRaycaster.prototype = {
             // current floor/ceiling elevations are going to be important for rendering
             var currentFloor = originFloor, currentCeiling = originCeiling;
 
-            _.map(intersections, function(intersection) {
+            intersections.map(function(intersection) {
                 var wallKind = intersection.wallType;
 
                 // project the wall
@@ -342,19 +343,15 @@ WallRaycaster.prototype = {
 
         function projectWall(top, bottom, zDistance) {
             // scale according to Z distance
-            var scalingFactor = projection.distance / zDistance;
+            var scalingFactor = projection.distance / (zDistance + 0.01) * screenHeight / projection.height;
 
             // texturing (before clipping)
             var texVStart = top, texVEnd = bottom;
 
-            // world space to projection plane space
+            // world space to screen space
             var relativeTop = top - eyeElevation, relativeBottom = bottom - eyeElevation;
-            var projectedTop = relativeTop * scalingFactor / projection.height;
-            var projectedBottom = relativeBottom * scalingFactor / projection.height;
-
-            // projection plane space to screen space
-            var screenTop = Math.round((0.5 + projectedTop) * screenHeight);
-            var screenBottom = Math.round((0.5 + projectedBottom) * screenHeight);
+            var screenTop = Math.round(relativeTop * scalingFactor) + screenCenterY;
+            var screenBottom = Math.round(relativeBottom * scalingFactor) + screenCenterY;
 
             return {
                 topY: screenTop, bottomY: screenBottom,
