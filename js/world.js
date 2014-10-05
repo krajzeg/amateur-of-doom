@@ -5,10 +5,10 @@ var floorData =
     "#        #" +
     "#      # #" +
     "#        #" +
-    "#  # ... #" +
-    "#  #     #" +
-    "#  # vvv #" +
-    "#  #  vvv#" +
+    "#   #... #" +
+    "#   #    #" +
+    "#   #vvv #" +
+    "#   # vvv#" +
     "##########";
 
 var ceilingData =
@@ -17,10 +17,10 @@ var ceilingData =
     "          " +
     "          " +
     "          " +
-    "          " +
-    "          " +
-    "          " +
-    "          " +
+    "    .     " +
+    "    .     " +
+    "  ....    " +
+    "  ....    " +
     "          ";
 
 // ====================================================================
@@ -38,6 +38,7 @@ function Level(floorData, ceilingData, levelWidth, levelHeight) {
         var ceiling, floor;
         switch(ceilingData.charAt(i)) {
             case ' ': ceiling = {elevation: -0.5, wallTexture: tCeiling, flatTexture: tCeiling}; break;
+            case '.': ceiling = {elevation: 0, wallTexture: tCeiling, flatTexture: tCeiling}; break;
         }
         ceilings[i] = ceiling;
 
@@ -151,7 +152,7 @@ Player.prototype = {
 
 function World(floorData, ceilingData, levelWidth, levelHeight) {
     this.level = new Level(floorData, ceilingData, levelWidth, levelHeight);
-    this.player = new Player(this, {x: 4, y: 4, elevation: 0.5, bearing: 29});
+    this.player = new Player(this, {x: 4.5, y: 4.5, elevation: 0.5, bearing: 29});
     this.update();
 }
 World.prototype = {

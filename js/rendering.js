@@ -1,7 +1,7 @@
 // "Strip" and "span" types - every pixel on the screen will be assigned to one of these
 var S_FLOOR = 'floor', S_CEILING = 'ceiling', S_WALL = 'wall', S_DUMMY = 'dummy';
 // Wall types (whether they come up from the floor or down from the ceiling
-var WT_FLOOR = 'floor', WT_CEILING = 'ceiling';
+var WT_FLOOR = 'floor', WT_CEILING = 'ceiling', WT_BOTH = 'both';
 
 // ===============================================================
 
@@ -153,27 +153,45 @@ WallRaycaster.prototype = {
                 // project the wall
                 var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
                 var z = distance * projection.columns[rx].angleCosine;
-                var wall = projectWall(intersection.top, intersection.bottom, z);
+                var wall;
+                switch(wallKind) {
+                    case WT_FLOOR:   wall = projectWall(intersection.top, intersection.bottom, z); break;
+                    case WT_CEILING: wall = projectWall(intersection.bottom, intersection.top, z); break;
+                }
 
                 // project the floor/ceiling up to this wall
                 if (wallKind == WT_FLOOR) {
                     // calculate the floor strip
                     var floorTop = wall.bottomY;
-                    var floor = {
+                    var floorStrip = {
                         kind: S_FLOOR, elevation: currentFloor.elevation,
                         topY: floorTop, bottomY: clippingBottom,
                         texture: currentFloor.flatTexture};
-                    floor = clipStrip(floor, clippingTop, clippingBottom);
-                    if (floor.topY < floor.bottomY)
-                        insertStrip(column, floor);
+                    floorStrip = clipStrip(floorStrip, clippingTop, clippingBottom);
+                    if (floorStrip.topY < floorStrip.bottomY)
+                        insertStrip(column, floorStrip);
 
                     // update drawing information
                     clippingBottom = Math.min(floorTop, clippingBottom);
                     currentFloor = intersection.withCell;
                 }
+                if (wallKind == WT_CEILING) {
+                    var ceilingStrip = {
+                        kind: S_CEILING, elevation: currentCeiling.elevation,
+                        topY: clippingTop, bottomY: wall.topY,
+                        texture: currentCeiling.flatTexture
+                    };
+                    ceilingStrip = clipStrip(ceilingStrip, clippingTop, clippingBottom);
+                    if (ceilingStrip.topY < ceilingStrip.bottomY)
+                        insertStrip(column, ceilingStrip);
+
+                    // update drawing information
+                    clippingTop = Math.max(wall.topY, clippingTop);
+                    currentCeiling = intersection.withCell;
+                }
 
                 // back-facing wall?
-                if (intersection.top > intersection.bottom)
+                if (wall.topY > wall.bottomY)
                     return;
 
                 // clip wall
@@ -184,8 +202,9 @@ WallRaycaster.prototype = {
                 }
 
                 // update clipping information
-                if (wallKind == WT_FLOOR) {
-                    clippingBottom = wall.topY;
+                switch(wallKind) {
+                    case WT_FLOOR: clippingBottom = wall.topY; break;
+                    case WT_CEILING: clippingTop = wall.bottomY; break;
                 }
 
                 // complete the wall information
@@ -232,8 +251,8 @@ WallRaycaster.prototype = {
                 frac = {x: origin.x - grid.x, y: origin.y - grid.y};
 
             // get the base floor/ceiling levels
-            var currentFloor = levelMap.floorAt(grid).elevation;
-            var currentCeiling = levelMap.ceilingAt(grid).elevation;
+            var currentFloor = levelMap.floorAt(grid);
+            var currentCeiling = levelMap.ceilingAt(grid);
 
             // prepare all information about the ray we're going to need
             var ray = Vec.fromAngle(angle);
@@ -272,36 +291,51 @@ WallRaycaster.prototype = {
                 var floor = levelMap.floorAt(grid),
                     ceiling = levelMap.ceilingAt(grid);
 
-                if (floor.elevation != currentFloor) {
-                    // yup! we have to raise/lower the floor
-                    var intersectionPoint = Vec.add(grid, frac);
+                if (ceiling.elevation != currentCeiling.elevation)
+                    makeIntersection(WT_CEILING, ceiling);
+                if (floor.elevation != currentFloor.elevation)
+                    makeIntersection(WT_FLOOR, floor);
 
-                    // texturing coordinate calculation
-                    var u;
-                    if (goingHorizontally) {
-                        u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
-                    } else {
-                        u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
-                    }
+                if (currentFloor.elevation == currentCeiling.elevation) {
+                    // we've reached the final wall
+                    // add a fake intersection to close up the opposing side
+                    if (_.last(intersections).wallType == WT_FLOOR)
+                        makeIntersection(WT_CEILING, currentCeiling)
+                    else
+                        makeIntersection(WT_FLOOR, currentFloor);
 
-                    // store all intersection information
-                    intersections.push({
-                        ray: ray,
-                        intersectedAt: intersectionPoint,
-                        bottom: currentFloor, top: floor.elevation,
-                        wallType: WT_FLOOR,
-                        wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
-                        withCell: floor,
-                        textureU: u
-                    });
+                    // return results
+                    return intersections;
+                }
+            }
 
-                    // raise the floor for future cells
-                    currentFloor = floor.elevation;
+            function makeIntersection(wallType, cell) {
+                var intersectionPoint = Vec.add(grid, frac);
+
+                // texturing coordinate calculation
+                var u;
+                if (goingHorizontally) {
+                    u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
+                } else {
+                    u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
                 }
 
-                if (currentFloor == currentCeiling) {
-                    // we've reached the final wall, let's return
-                    return intersections;
+                // store all intersection information
+                intersections.push({
+                    ray: ray,
+                    intersectedAt: intersectionPoint,
+                    bottom: (wallType == WT_FLOOR) ? currentFloor.elevation : currentCeiling.elevation,
+                    top: cell.elevation,
+                    wallType: wallType,
+                    wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
+                    withCell: cell,
+                    textureU: u
+                });
+
+                // raise the floor for future cells
+                switch(wallType) {
+                    case WT_FLOOR:   currentFloor = cell; break;
+                    case WT_CEILING: currentCeiling = cell; break;
                 }
             }
         }
@@ -364,12 +398,6 @@ WallRaycaster.prototype = {
          * @param newStrip the new strip to add
          */
         function insertStrip(strips, newStrip) {
-            if (strips.length == 0) {
-                // nobody else here, happy coincidence
-                strips.push(newStrip);
-                return;
-            }
-
             // look for the right place
             for (var i = 0; i < strips.length; i++) {
                 if (strips[i].bottomY > newStrip.bottomY) {
@@ -378,6 +406,9 @@ WallRaycaster.prototype = {
                     return;
                 }
             }
+
+            // splice at the end if it doesn't go before anything
+            strips.push(newStrip);
         }
      }
 };
