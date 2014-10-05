@@ -1,5 +1,7 @@
 // "Strip" and "span" types - every pixel on the screen will be assigned to one of these
 var S_FLOOR = 'floor', S_CEILING = 'ceiling', S_WALL = 'wall', S_DUMMY = 'dummy';
+// Wall types (whether they come up from the floor or down from the ceiling
+var WT_FLOOR = 'floor', WT_CEILING = 'ceiling';
 
 // ===============================================================
 
@@ -128,6 +130,7 @@ WallRaycaster.prototype = {
         // what are the floor/ceiling elevations we should start with?
         var originCell = levelMap.cellAtVector(rayOrigin);
         var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
+        var currentFloor = baseFloor, currentCeiling = baseCeiling;
 
         // OK, Mr. Raycaster, go through all the columns on the screen
         var columns = new Array(screenWidth), column;
@@ -137,25 +140,33 @@ WallRaycaster.prototype = {
 
             // look for a wall (there will be one)
             var rayAngle = eyeAngle + projection.columns[rx].relativeAngle;
-            var intersection = castRayAndReturnIntersections(rayOrigin, rayAngle);
+            var intersections = castRayAndReturnIntersections(rayOrigin, rayAngle);
 
-            // project the wall strip
-            var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
-            var z = distance * projection.columns[rx].angleCosine;
-            var wall = projectWall(intersection.top, intersection.bottom, z);
+            // go through all the walls we've encountered, near-to-far, and store their info
+            var clippingTop = 0, clippingBottom = screenHeight;
 
-            // light the wall (simplified Phong lighting with no specularity)
-            wall.lighting = this.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
+            var intersection = _.last(intersections);
+                // project the wall
+                var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
+                var z = distance * projection.columns[rx].angleCosine;
+                var wall = projectWall(intersection.top, intersection.bottom, z);
 
-            // complete the wall information
-            wall.kind = S_WALL;
-            wall.texturing.texture = intersection.withCell.wallTexture;
-            wall.texturing.u = intersection.textureU;
+                // clip wall
+                wall = clipWall(wall, clippingTop, clippingBottom);
 
-            // insert the new strip in the right place in the column
-            insertStrip(column, wall);
+                // complete the wall information
+                wall.kind = S_WALL;
+                wall.texturing.texture = intersection.withCell.wallTexture;
+                wall.texturing.u = intersection.textureU;
 
-            // cap the column off with a floor and ceiling if needed
+                // light the wall (simplified Phong lighting with no specularity)
+                wall.lighting = this.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
+
+                // insert the new strip in the right place in the column
+                insertStrip(column, wall);
+
+
+            // cap the column off with a floor and ceiling, if needed
             if (column[0].topY != 0)
                 column.unshift({kind: S_CEILING, elevation: baseCeiling, topY: 0, bottomY: column[0].topY});
             if (_.last(column).bottomY != screenHeight)
@@ -189,7 +200,8 @@ WallRaycaster.prototype = {
             var sgn = {x: (ray.x > 0) ? 1 : -1, y: (ray.y > 0) ? 1 : -1};
             var ratioXY = abs.x / abs.y, ratioYX = abs.y / abs.x;
 
-            // we iterate until we hit something, at which point we'll return
+            // we iterate until we hit the last wall (one which ends up filling the screen)
+            var intersections = [];
             while(true) {
                 // determine if the next grid cell the ray will hit
                 // is going to be to the right/left or up/down
@@ -213,13 +225,13 @@ WallRaycaster.prototype = {
                     frac.x += sgn.x * dist.y * ratioXY;
                 }
 
-                // we're in the next grid, did we hit?
+                // we're in the next grid, did we hit a wall?
                 var cell = cells[grid.y * lW + grid.x];
-                if (cell.floor < floorBase || cell.ceiling > ceilingBase) {
-                    // yup! that's a wall!
+                if (cell.floor != floorBase) {
+                    // yup! we have to raise the floor
                     var intersectionPoint = Vec.add(grid, frac);
 
-                    // texturing coordinate
+                    // texturing coordinate calculation
                     var u;
                     if (goingHorizontally) {
                         u = (ray.x > 0) ? frac.y : (1.0 - frac.y)
@@ -227,15 +239,24 @@ WallRaycaster.prototype = {
                         u = (ray.y < 0) ? frac.x : (1.0 - frac.x);
                     }
 
-                    // return all intersection information
-                    return {
+                    // store all intersection information
+                    intersections.push({
                         ray: ray,
                         intersectedAt: intersectionPoint,
                         bottom: floorBase, top: cell.floor,
+                        wallType: WT_FLOOR,
                         wallNormal: {x: goingHorizontally ? sgn.x : 0, y: goingHorizontally ? 0 : sgn.y},
                         withCell: cell,
                         textureU: u
-                    };
+                    });
+
+                    // raise the floor for future cells
+                    floorBase = cell.floor;
+                }
+
+                if (floorBase == ceilingBase) {
+                    // we've reached the final wall, let's return
+                    return intersections;
                 }
             }
         }
@@ -252,18 +273,6 @@ WallRaycaster.prototype = {
             var projectedTop = relativeTop * scalingFactor / projection.height;
             var projectedBottom = relativeBottom * scalingFactor / projection.height;
 
-            // clip to screen
-            if (projectedTop < -0.5) {
-                // clip texture coordinates too
-                texVStart += (texVEnd - texVStart) * (-0.5 - projectedTop) / (projectedBottom - projectedTop);
-                projectedTop = -0.5;
-            }
-            if (projectedBottom > 0.5)
-            {
-                texVEnd -= (texVEnd - texVStart) * (projectedBottom - 0.5) / (projectedBottom - projectedTop);
-                projectedBottom = 0.5;
-            }
-
             // projection plane space to screen space
             var screenTop = Math.round((0.5 + projectedTop) * screenHeight);
             var screenBottom = Math.round((0.5 + projectedBottom) * screenHeight);
@@ -272,6 +281,26 @@ WallRaycaster.prototype = {
                 topY: screenTop, bottomY: screenBottom,
                 texturing: {topV: texVStart, bottomV: texVEnd}
             };
+        }
+
+        /**
+         * Clips the top and bottom of a wall to just what's visible.
+         */
+        function clipWall(wall, clipTop, clipBottom) {
+            if (wall.topY < clipTop) {
+                // clip texture coordinates too
+                var textureMeasure = wall.texturing.bottomV - wall.texturing.topV;
+                wall.texturing.topV += textureMeasure * (clipTop - wall.topY) / (wall.bottomY - wall.topY);
+                wall.topY = clipTop;
+            }
+            if (wall.bottomY > clipBottom)
+            {
+                textureMeasure = wall.texturing.bottomV - wall.texturing.topV; // we have to recalculate here even if we've done it once, it's different now
+                wall.texturing.bottomV -= textureMeasure * (wall.bottomY - clipBottom) / (wall.bottomY - wall.topY);
+                wall.bottomY = clipBottom;
+            }
+
+            return wall;
         }
 
         /**
