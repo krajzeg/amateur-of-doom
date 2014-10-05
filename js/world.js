@@ -5,7 +5,7 @@ var levelData =
     "#        #" +
     "#      # #" +
     "#        #" +
-    "#  # #####" +
+    "#  # ... #" +
     "#  #     #" +
     "#  # vvv #" +
     "#  #     #" +
@@ -48,7 +48,9 @@ Level.prototype = {
 
 // ====================================================================
 
-var PLAYER_RADIUS = 0.3, PLAYER_MOVEMENT_SPEED = 0.1;
+var PLAYER_RADIUS = 0.3,
+    PLAYER_MOVEMENT_SPEED = 0.1,
+    PLAYER_SCALING_HEIGHT = 0.2;
 
 function Player(world, properties) {
     this.world = world;
@@ -84,7 +86,7 @@ Player.prototype = {
         this.x = newPos.x; this.y = newPos.y;
 
         function isInAWall(pos) {
-            return (self.floor > level.cellAtVector(pos).floor);
+            return (self.floor - level.cellAtVector(pos).floor > PLAYER_SCALING_HEIGHT);
         }
     },
 
