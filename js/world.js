@@ -6,7 +6,7 @@ var floorData =
     "#      # #" +
     "#        #" +
     "#   #... #" +
-    "#   #    #" +
+    "#   X    #" +
     "#   #vvv #" +
     "#   # vvv#" +
     "##########";
@@ -17,10 +17,10 @@ var ceilingData =
     "          " +
     "          " +
     "          " +
+    "          " +
     "    .     " +
-    "    .     " +
-    "  ....    " +
-    "  ....    " +
+    "          " +
+    "     ....." +
     "          ";
 
 // ====================================================================
@@ -38,7 +38,7 @@ function Level(floorData, ceilingData, levelWidth, levelHeight) {
         var ceiling, floor;
         switch(ceilingData.charAt(i)) {
             case ' ': ceiling = {elevation: -0.5, wallTexture: tCeiling, flatTexture: tCeiling}; break;
-            case '.': ceiling = {elevation: 0, wallTexture: tCeiling, flatTexture: tCeiling}; break;
+            case '.': ceiling = {elevation: 0, wallTexture: tWall, flatTexture: tWall}; break;
         }
         ceilings[i] = ceiling;
 
@@ -46,6 +46,7 @@ function Level(floorData, ceilingData, levelWidth, levelHeight) {
             case ' ': floor = {elevation: 1, wallTexture: tFloor, flatTexture: tFloor}; break;
             case '.': floor = {elevation: 0.875, wallTexture: tFloor, flatTexture: tFloor}; break;
             case 'v': floor = {elevation: 1.125, wallTexture: tFloor, flatTexture: tCeiling}; break;
+            case 'X': floor = {elevation: 0.5, wallTexture: tWall, flatTexture: tWall}; break;
             case '#': floor = {elevation: ceiling.elevation, wallTexture: tWall, flatTexture: tFloor}; break;
         }
         floors[i] = floor;
