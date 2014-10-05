@@ -128,11 +128,7 @@ WallRaycaster.prototype = {
         var eyeAngle = deg2rad(pointOfView.bearing);
         var eyeElevation = pointOfView.elevation;
 
-        // floor/ceiling elevations are going to be important for rendering
         var originCell = levelMap.cellAtVector(rayOrigin);
-        var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
-        var previousCeiling, previousCeiling;
-        var currentFloor = baseFloor, currentCeiling = baseCeiling;
 
         // OK, Mr. Raycaster, go through all the columns on the screen
         var columns = new Array(screenWidth), column;
@@ -146,6 +142,10 @@ WallRaycaster.prototype = {
 
             // go through all the walls we've encountered, near-to-far, and store their info
             var clippingTop = 0, clippingBottom = screenHeight;
+
+            // current floor/ceiling elevations are going to be important for rendering
+            var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
+            var currentFloor = baseFloor, currentCeiling = baseCeiling;
 
             _.map(intersections, function(intersection) {
                 var wallKind = intersection.wallType;
@@ -578,7 +578,7 @@ LevelRenderer.prototype = {
 
                 // calculate pixel color based on texture
                 texel = tex[texWidth * wholeU + wholeV];
-                r = (texel & 0xff) * lighting;
+                r = 255; //(texel & 0xff) * lighting;
                 g = ((texel >> 8) & 0xff) * lighting;
                 b = ((texel >> 16) & 0xff) * lighting;
 

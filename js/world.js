@@ -16,12 +16,14 @@ var levelData =
 function Level(levelData, levelWidth, levelHeight) {
     var cells = new Array(levelData.length);
 
-    var tWall = g_resourceManager.texture('wall');
+    var tWall = g_resourceManager.texture('wall'),
+        tFloor = g_resourceManager.texture('floor');
 
     for (var i = 0; i < levelData.length; i++) {
         switch(levelData.charAt(i)) {
             case ' ': cells[i] = {floor: 1, ceiling: -0.5}; break;
-            case '.': cells[i] = {floor: 0.75, ceiling: -0.5, wallTexture: tWall}; break;
+            case '.': cells[i] = {floor: 0.875, ceiling: -0.5, wallTexture: tFloor}; break;
+            case 'v': cells[i] = {floor: 1.125, ceiling: -0.5, wallTexture: tFloor}; break;
             case '#': cells[i] = {floor: -0.5, ceiling: -0.5, wallTexture: tWall}; break;
         }
     }
