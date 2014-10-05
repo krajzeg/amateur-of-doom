@@ -1,7 +1,7 @@
 // "Strip" and "span" types - every pixel on the screen will be assigned to one of these
-var S_FLOOR = 'floor', S_CEILING = 'ceiling', S_WALL = 'wall', S_DUMMY = 'dummy';
+var S_FLOOR = 0, S_CEILING = 1, S_WALL = 2;
 // Wall types (whether they come up from the floor or down from the ceiling
-var WT_FLOOR = 'floor', WT_CEILING = 'ceiling', WT_BOTH = 'both';
+var WT_FLOOR = 0, WT_CEILING = 1;
 
 // ===============================================================
 
@@ -136,7 +136,7 @@ WallRaycaster.prototype = {
         var columns = new Array(screenWidth), column;
         for (var rx = 0; rx < screenWidth; rx++) {
             // every column starts empty
-            column = [];
+            var floorStrips = [], ceilingStrips = [];
 
             // look for a wall (there will be one)
             var rayAngle = eyeAngle + projection.columns[rx].relativeAngle;
@@ -170,7 +170,7 @@ WallRaycaster.prototype = {
                         texture: currentFloor.flatTexture};
                     floorStrip = clipStrip(floorStrip, clippingTop, clippingBottom);
                     if (floorStrip.topY < floorStrip.bottomY)
-                        insertStrip(column, floorStrip);
+                        floorStrips.unshift(floorStrip);
 
                     // update drawing information
                     clippingBottom = Math.min(floorTop, clippingBottom);
@@ -184,7 +184,7 @@ WallRaycaster.prototype = {
                     };
                     ceilingStrip = clipStrip(ceilingStrip, clippingTop, clippingBottom);
                     if (ceilingStrip.topY < ceilingStrip.bottomY)
-                        insertStrip(column, ceilingStrip);
+                        ceilingStrips.push(ceilingStrip);
 
                     // update drawing information
                     clippingTop = Math.max(wall.topY, clippingTop);
@@ -217,26 +217,14 @@ WallRaycaster.prototype = {
                 wall.lighting = self.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
 
                 // insert the wall strip in the right place in the column
-                insertStrip(column, wall);
+                switch(wallKind) {
+                    case WT_FLOOR: floorStrips.unshift(wall); break;
+                    case WT_CEILING: ceilingStrips.push(wall); break;
+                }
             });
 
-
-            // cap the column off with a floor and ceiling, if needed
-            if (column[0].topY != 0)
-                column.unshift({
-                    kind: S_CEILING, elevation: originCeiling.elevation,
-                    topY: 0, bottomY: column[0].topY,
-                    texture: originCeiling.flatTexture
-                });
-            if (_.last(column).bottomY != screenHeight)
-                column.push({
-                    kind: S_FLOOR, elevation: originFloor.elevation,
-                    topY: _.last(column).bottomY, bottomY: screenHeight,
-                    texture: originFloor.flatTexture
-                });
-
             // store the finished column
-            columns[rx] = column;
+            columns[rx] = ceilingStrips.concat(floorStrips);
         }
 
         return columns;
