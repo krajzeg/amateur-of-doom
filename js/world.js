@@ -8,7 +8,7 @@ var floorData =
     "#  # ... #" +
     "#  #     #" +
     "#  # vvv #" +
-    "#  #     #" +
+    "#  #  vvv#" +
     "##########";
 
 var ceilingData =

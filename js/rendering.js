@@ -145,7 +145,7 @@ WallRaycaster.prototype = {
             var clippingTop = 0, clippingBottom = screenHeight;
 
             // current floor/ceiling elevations are going to be important for rendering
-            var currentFloor = originFloor.elevation, currentCeiling = originCeiling.elevation;
+            var currentFloor = originFloor, currentCeiling = originCeiling;
 
             _.map(intersections, function(intersection) {
                 var wallKind = intersection.wallType;
@@ -159,14 +159,17 @@ WallRaycaster.prototype = {
                 if (wallKind == WT_FLOOR) {
                     // calculate the floor strip
                     var floorTop = wall.bottomY;
-                    var floor = {kind: S_FLOOR, elevation: currentFloor, topY: floorTop, bottomY: clippingBottom};
+                    var floor = {
+                        kind: S_FLOOR, elevation: currentFloor.elevation,
+                        topY: floorTop, bottomY: clippingBottom,
+                        texture: currentFloor.flatTexture};
                     floor = clipStrip(floor, clippingTop, clippingBottom);
                     if (floor.topY < floor.bottomY)
                         insertStrip(column, floor);
 
                     // update drawing information
                     clippingBottom = Math.min(floorTop, clippingBottom);
-                    currentFloor = intersection.top;
+                    currentFloor = intersection.withCell;
                 }
 
                 // back-facing wall?
@@ -200,9 +203,17 @@ WallRaycaster.prototype = {
 
             // cap the column off with a floor and ceiling, if needed
             if (column[0].topY != 0)
-                column.unshift({kind: S_CEILING, elevation: originCeiling.elevation, topY: 0, bottomY: column[0].topY});
+                column.unshift({
+                    kind: S_CEILING, elevation: originCeiling.elevation,
+                    topY: 0, bottomY: column[0].topY,
+                    texture: originCeiling.flatTexture
+                });
             if (_.last(column).bottomY != screenHeight)
-                column.push({kind: S_FLOOR, elevation: originFloor.elevation, topY: _.last(column).bottomY, bottomY: screenHeight});
+                column.push({
+                    kind: S_FLOOR, elevation: originFloor.elevation,
+                    topY: _.last(column).bottomY, bottomY: screenHeight,
+                    texture: originFloor.flatTexture
+                });
 
             // store the finished column
             columns[rx] = column;
@@ -446,6 +457,7 @@ SpanCollector.prototype = {
             var span = {
                 kind: strip.kind,
                 elevation: strip.elevation,
+                texture: strip.texture,
 
                 // topY-bottomY is the full 'bounding box' of the span
                 topY: strip.topY,
@@ -568,7 +580,7 @@ LevelRenderer.prototype = {
         var buffer = this.buffer, pixels = buffer.data;
 
         spans.map(function drawSpan(span) {
-            var texture = g_resourceManager.texture(span.kind);
+            var texture = span.texture;
             var texWidth = texture.width, texHeight = texture.height, tex = texture.pixels;
 
             span.rows.map(function drawRow(row) {
