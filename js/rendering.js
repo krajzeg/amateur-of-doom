@@ -118,6 +118,7 @@ function WallRaycaster(projection) {
 }
 WallRaycaster.prototype = {
     projectWalls: function(pointOfView, levelMap) {
+        var self = this;
         // how are we projecting this thing?
         var screenWidth = this.projection.screenWidth, screenHeight = this.projection.screenHeight;
         var projection = this.projection;
@@ -127,9 +128,10 @@ WallRaycaster.prototype = {
         var eyeAngle = deg2rad(pointOfView.bearing);
         var eyeElevation = pointOfView.elevation;
 
-        // what are the floor/ceiling elevations we should start with?
+        // floor/ceiling elevations are going to be important for rendering
         var originCell = levelMap.cellAtVector(rayOrigin);
         var baseFloor = originCell.floor, baseCeiling = originCell.ceiling;
+        var previousCeiling, previousCeiling;
         var currentFloor = baseFloor, currentCeiling = baseCeiling;
 
         // OK, Mr. Raycaster, go through all the columns on the screen
@@ -145,25 +147,51 @@ WallRaycaster.prototype = {
             // go through all the walls we've encountered, near-to-far, and store their info
             var clippingTop = 0, clippingBottom = screenHeight;
 
-            var intersection = _.last(intersections);
+            _.map(intersections, function(intersection) {
+                var wallKind = intersection.wallType;
+
                 // project the wall
                 var distance = Vec.distance(rayOrigin, intersection.intersectedAt);
                 var z = distance * projection.columns[rx].angleCosine;
                 var wall = projectWall(intersection.top, intersection.bottom, z);
 
+                // project the floor/ceiling up to this wall
+                if (wallKind == WT_FLOOR) {
+                    // calculate the floor strip
+                    var floorTop = wall.bottomY;
+                    var floor = {kind: S_FLOOR, elevation: currentFloor, topY: floorTop, bottomY: clippingBottom};
+                    floor = clipStrip(floor, clippingTop, clippingBottom);
+                    if (floor.topY < floor.bottomY)
+                        insertStrip(column, floor);
+
+                    // update drawing information
+                    clippingBottom = Math.min(floorTop, clippingBottom);
+                    currentFloor = intersection.top;
+                }
+
                 // clip wall
-                wall = clipWall(wall, clippingTop, clippingBottom);
+                wall = clipStrip(wall, clippingTop, clippingBottom);
+                if (wall.topY >= wall.bottomY) {
+                    // clipped into oblivion, no need to do the rest
+                    return;
+                }
+
+                // update clipping information
+                if (wallKind == WT_FLOOR) {
+                    clippingBottom = wall.topY;
+                }
 
                 // complete the wall information
                 wall.kind = S_WALL;
                 wall.texturing.texture = intersection.withCell.wallTexture;
                 wall.texturing.u = intersection.textureU;
 
-                // light the wall (simplified Phong lighting with no specularity)
-                wall.lighting = this.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
+                // light the wall
+                wall.lighting = self.lighting.lightingFactor(intersection.wallNormal, distance, intersection.ray);
 
-                // insert the new strip in the right place in the column
+                // insert the wall strip in the right place in the column
                 insertStrip(column, wall);
+            });
 
 
             // cap the column off with a floor and ceiling, if needed
@@ -286,21 +314,29 @@ WallRaycaster.prototype = {
         /**
          * Clips the top and bottom of a wall to just what's visible.
          */
-        function clipWall(wall, clipTop, clipBottom) {
-            if (wall.topY < clipTop) {
-                // clip texture coordinates too
-                var textureMeasure = wall.texturing.bottomV - wall.texturing.topV;
-                wall.texturing.topV += textureMeasure * (clipTop - wall.topY) / (wall.bottomY - wall.topY);
-                wall.topY = clipTop;
-            }
-            if (wall.bottomY > clipBottom)
-            {
-                textureMeasure = wall.texturing.bottomV - wall.texturing.topV; // we have to recalculate here even if we've done it once, it's different now
-                wall.texturing.bottomV -= textureMeasure * (wall.bottomY - clipBottom) / (wall.bottomY - wall.topY);
-                wall.bottomY = clipBottom;
+        function clipStrip(strip, clipTop, clipBottom) {
+            // clip the top
+            if (strip.topY < clipTop) {
+                if (strip.texturing) {
+                    // clip texture coordinates too
+                    var textureMeasure = strip.texturing.bottomV - strip.texturing.topV;
+                    strip.texturing.topV += textureMeasure * (clipTop - strip.topY) / (strip.bottomY - strip.topY);
+                }
+                strip.topY = clipTop;
             }
 
-            return wall;
+            // clip the bottom
+            if (strip.bottomY > clipBottom)
+            {
+                if (strip.texturing) {
+                    // clip texture coordinates too
+                    textureMeasure = strip.texturing.bottomV - strip.texturing.topV;
+                    strip.texturing.bottomV -= textureMeasure * (strip.bottomY - clipBottom) / (strip.bottomY - strip.topY);
+                }
+                strip.bottomY = clipBottom;
+            }
+
+            return strip;
         }
 
         /**
