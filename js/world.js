@@ -7,7 +7,7 @@ var levelData =
     "#        #" +
     "#  # #####" +
     "#  #     #" +
-    "#  # ... #" +
+    "#  # vvv #" +
     "#  #     #" +
     "##########";
 
@@ -21,7 +21,7 @@ function Level(levelData, levelWidth, levelHeight) {
 
     for (var i = 0; i < levelData.length; i++) {
         switch(levelData.charAt(i)) {
-            case ' ': cells[i] = {floor: 1, ceiling: -0.5}; break;
+            case ' ': cells[i] = {floor: 1, ceiling: -0.5, wallTexture: tFloor}; break;
             case '.': cells[i] = {floor: 0.875, ceiling: -0.5, wallTexture: tFloor}; break;
             case 'v': cells[i] = {floor: 1.125, ceiling: -0.5, wallTexture: tFloor}; break;
             case '#': cells[i] = {floor: -0.5, ceiling: -0.5, wallTexture: tWall}; break;

@@ -169,6 +169,10 @@ WallRaycaster.prototype = {
                     currentFloor = intersection.top;
                 }
 
+                // back-facing wall?
+                if (intersection.top > intersection.bottom)
+                    return;
+
                 // clip wall
                 wall = clipStrip(wall, clippingTop, clippingBottom);
                 if (wall.topY >= wall.bottomY) {
