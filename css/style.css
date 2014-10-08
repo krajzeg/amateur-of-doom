@@ -13,13 +13,20 @@ body {
     border: 1px solid black;
     box-shadow: 0 2px 5px 0 #000;
 
+    line-height: 0;
+
     background: #1a2024;
     color: #ccc8c0;
 }
 
+canvas {
+    margin: 0;
+}
+
 .info {
     border-top: 1px solid black;
-    padding: 0.7em;
+    margin: 0;
+    padding: 1em;
 
     box-shadow: inset 0 -10px 5px 0 rgba(0,0,0,0.1);
 }

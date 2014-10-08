@@ -30,18 +30,34 @@ Input.prototype = {
             }
         }
 
+        // compatibility with various browsers
+        var requestPointerLock = mouseElement.requestPointerLock ||
+            mouseElement.mozRequestPointerLock ||
+            mouseElement.webkitRequestPointerLock;
+        if (!requestPointerLock) {
+            window.alert("Your browser doesn't support locking the mouse pointer.");
+            return;
+        }
+        requestPointerLock = requestPointerLock.bind(mouseElement);
+
         // mouse controls
         mouseElement.addEventListener('click', function(evt) {
-            mouseElement.requestPointerLock();
+            requestPointerLock();
         });
-        document.addEventListener('pointerlockchange', function(evt) {
-            self.locked = document.pointerLockElement == mouseElement;
-            if (self.locked)
-                self.gracePeriod = 1;
+        ['pointerlockchange', 'webkitpointerlockchange', 'mozpointerlockchange'].map(function(eventName) {
+            document.addEventListener(eventName, function(_) {
+                var element = document.pointerLockElement || document.mozPointerLockElement || document.webkitPointerLockElement;
+                self.locked = !!element;
+                if (self.locked)
+                    self.gracePeriod = 1;
+            });
         });
         document.addEventListener('mousemove', function(evt) {
-            if (self.locked && (!self.gracePeriod))
-                self.rotation = {x: evt.movementX, y: evt.movementY};
+            if (self.locked && (!self.gracePeriod)) {
+                var x = evt.movementX || evt.mozMovementX || evt.webkitMovementX || 0;
+                var y = evt.movementY || evt.mozMovementY || evt.webkitMovementY || 0;
+                self.rotation = {x: x, y: y};
+            }
         });
     },
 
